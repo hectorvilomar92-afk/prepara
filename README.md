@@ -1,0 +1,2 @@
+# prepara
+pase de lista 
