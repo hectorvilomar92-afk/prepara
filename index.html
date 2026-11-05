@@ -88,14 +88,15 @@ input.cell { width: 55px; padding: 6px; text-align: center; border: 1px solid #c
 <div id="loginScreen">
   <div class="login-box">
     <h2>🏫 PLANI PREPARA</h2>
-    <p>Registro de Asistencia y Calificaciones</p>
+    <p>PLANI PREPARA · Registro de Asistencia y Calificaciones</p>
     <div id="loginMsg"></div>
     <div id="offlineAdminBox" style="display:none;background:#eef6ff;border:1px solid #b7d5f5;padding:12px;border-radius:8px;margin:12px 0;">
-      <b>🖥️ Acceso local (sin Internet)</b><div style="font-size:12px;margin:6px 0;">En esta computadora puedes crear el administrador local la primera vez.</div>
-      <button class="btn btn-info btn-block" onclick="setupLocalAdmin()">Crear / configurar administrador local</button>
+      <b>🖥️ Acceso administrador local</b><div id="localAdminHelp" style="font-size:12px;margin:6px 0;">Configura el primer administrador local para esta computadora.</div>
+      <button class="btn btn-info btn-block" id="localAdminSetupButton" onclick="setupLocalAdmin()">Crear administrador local</button>
       <div id="localAdminForm" style="display:none;margin-top:8px;"><input id="localAdminName" placeholder="Nombre del administrador"><input id="localAdminEmail" type="email" placeholder="Correo local"><input id="localAdminPass" type="password" placeholder="Contraseña (mín. 8 caracteres)"><button class="btn btn-success btn-block" onclick="saveLocalAdmin()">Guardar administrador local</button></div>
     </div>
     <div id="loginForm">
+      <p style="font-size:12px;margin:-12px 0 10px;color:#555;">Para usar datos compartidos, inicia sesión con una cuenta Appwrite. El administrador local es solo respaldo de esta computadora.</p>
       <input type="email" id="loginEmail" placeholder="📧 Correo electrónico">
       <input type="password" id="loginPassword" placeholder="🔒 Contraseña">
       <button class="btn btn-block" onclick="handleLogin()">🔑 Iniciar Sesión</button>
@@ -115,7 +116,7 @@ input.cell { width: 55px; padding: 6px; text-align: center; border: 1px solid #c
   <header>
     <h2>📚 PLANI PREPARA</h2>
     <div>
-      <span id="userDisplay">👤 Usuario</span> <span id="connectionState" style="font-size:12px;padding:4px 8px;background:#fff;color:#1e3c72;border-radius:12px;">● conexión</span>
+      <span id="userDisplay">👤 Usuario</span> <span id="connectionState" style="font-size:12px;padding:4px 8px;background:#fff;color:#1e3c72;border-radius:12px;">● Sin verificar</span>
       <button class="btn btn-danger" onclick="handleLogout()">🚪 Salir</button>
     </div>
   </header>
@@ -214,9 +215,11 @@ input.cell { width: 55px; padding: 6px; text-align: center; border: 1px solid #c
     <div id="admin" class="section">
       <h3>⚙️ Panel Admin</h3>
       <h4>👥 Usuarios</h4>
+      <p id="cloudUserNotice" style="font-size:13px;color:#555;margin:8px 0;">Los usuarios nuevos se crean en Appwrite y podrán iniciar sesión en línea.</p>
       <div class="form-row">
         <input type="text" id="newUserName" placeholder="Nombre" style="flex: 1;">
         <input type="email" id="newUserEmail" placeholder="Email" style="flex: 1;">
+        <input type="password" id="newUserPassword" placeholder="Contraseña inicial (mín. 8)" style="flex: 1;">
         <select id="newUserRole"><option value="docente">Docente</option><option value="admin">Admin</option></select>
         <button class="btn btn-success" onclick="createUser()">➕ Crear</button>
       </div>
@@ -320,8 +323,8 @@ function localId(){return 'local_'+Date.now().toString(36)+'_'+Math.random().toS
 async function hashPassword(password,salt){const enc=new TextEncoder();const key=await crypto.subtle.importKey('raw',enc.encode(password),'PBKDF2',false,['deriveBits']);const bits=await crypto.subtle.deriveBits({name:'PBKDF2',salt:enc.encode(salt),iterations:120000,hash:'SHA-256'},key,256);return [...new Uint8Array(bits)].map(x=>x.toString(16).padStart(2,'0')).join('');}
 async function setupLocalAdmin(){document.getElementById('localAdminForm').style.display='block'; const users=await localAll('local_users');if(users.some(u=>u.role==='admin')){document.getElementById('localAdminName').value='Administrador local';document.getElementById('localAdminEmail').value=users.find(u=>u.role==='admin').email;showMsg('Ya existe un administrador local. Puedes actualizar su contraseña.','success');}}
 async function saveLocalAdmin(){const name=document.getElementById('localAdminName').value.trim(),email=document.getElementById('localAdminEmail').value.trim().toLowerCase(),pass=document.getElementById('localAdminPass').value;if(!name||!email||pass.length<8)return showMsg('Completa nombre, correo y contraseña de 8 caracteres.');const salt=localId(),hash=await hashPassword(pass,salt);const users=await localAll('local_users');const old=users.find(u=>u.role==='admin');await localPut('local_users',{$id:old?old.$id:localId(),name,email,role:'admin',salt,hash,is_blocked:false});showMsg('Administrador local guardado. Ya puedes iniciar sesión sin Internet.','success');document.getElementById('loginEmail').value=email;document.getElementById('loginPassword').value='';document.getElementById('localAdminForm').style.display='none';document.getElementById('offlineAdminBox').style.display='none';}
-async function localLogin(email,password){const users=await localAll('local_users'),u=users.find(x=>x.email===email.toLowerCase());if(!u)return null;const h=await hashPassword(password,u.salt);if(h!==u.hash||u.is_blocked)return null;localMode=true;localSession=u;return {$id:u.$id,email:u.email,name:u.name};}
-async function showFirstAdminSetup(){try{const users=await localAll('local_users');document.getElementById('offlineAdminBox').style.display=users.some(u=>u.role==='admin')?'none':'block';}catch(e){console.warn('No se pudo comprobar el administrador local.',e);}}
+async function localLogin(email,password){const users=await localAll('local_users'),u=users.find(x=>x.email===email.toLowerCase()&&x.role==='admin');if(!u)return null;const h=await hashPassword(password,u.salt);if(h!==u.hash||u.is_blocked)return null;localMode=true;localSession=u;setConnectionState('● Administrador local de emergencia','local');return {$id:u.$id,email:u.email,name:u.name};}
+async function showFirstAdminSetup(){try{const users=await localAll('local_users');const exists=users.some(u=>u.role==='admin');document.getElementById('offlineAdminBox').style.display='block';document.getElementById('localAdminHelp').textContent=exists?'Si no recuerdas la contraseña, puedes restablecer el acceso del administrador de esta computadora.':'Configura el primer administrador local para esta computadora.';document.getElementById('localAdminSetupButton').textContent=exists?'Restablecer acceso del administrador local':'Crear administrador local';}catch(e){console.warn('No se pudo comprobar el administrador local.',e);}}
 const DEFAULT_SUBJECTS=['Lengua Española','Matemáticas','Ciencias Sociales (Historia, Geografía y Cívica)','Ciencias de la Naturaleza (Biología, Química y Física)','Inglés','Francés','Formación Integral Humana y Religiosa (FIHR)','Educación Artística','Educación Física'];
 const normalizeSubject=value=>String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
 async function ensureSubjectsForGrade(gradeId){if(!gradeId)return [];const result=await apiGet(`/databases/${DB_ID}/collections/${COL.subjects}/documents?limit=100`);let subjects=result.documents.filter(s=>s.grade_id===gradeId);for(const name of DEFAULT_SUBJECTS){if(!subjects.some(s=>normalizeSubject(s.name)===normalizeSubject(name))){try{subjects.push(await apiPost(`/databases/${DB_ID}/collections/${COL.subjects}/documents`,{documentId:'unique()',data:{grade_id:gradeId,name}}));}catch(err){console.warn('No se pudo crear la asignatura '+name,err.message);}}}return subjects.sort((a,b)=>String(a.name).localeCompare(String(b.name),'es'));}
@@ -346,13 +349,16 @@ async function apiRequest(method, path, data = null) {
     credentials: 'include'
   };
   if (data) options.body = JSON.stringify(data);
-  if(localMode) return localApi(method,path,data);
+  if(localMode){setConnectionState('● Administrador local de emergencia','local');return localApi(method,path,data);}
   try {
     const response = await fetch(`${APPWRITE_ENDPOINT}${path}`, options);
     if (!response.ok) { const error = await response.json().catch(() => ({ message: response.statusText })); throw new Error(error.message || response.statusText); }
+    setConnectionState(path.startsWith('/databases/')?'● Base Appwrite conectada':'● Appwrite conectado','online');
     return response.json();
-  } catch(err) { if(!navigator.onLine || err instanceof TypeError) { localMode=true; return localApi(method,path,data); } throw err; }
+  } catch(err) { if(!navigator.onLine || err instanceof TypeError) { localMode=true; setConnectionState('● Modo local de emergencia','local'); return localApi(method,path,data); } throw err; }
 }
+
+function setConnectionState(label,mode='unknown'){const el=document.getElementById('connectionState');if(!el)return;el.textContent=label;el.style.color=mode==='online'?'#155724':mode==='local'?'#856404':'#1e3c72';}
 
 async function apiGet(path) { return apiRequest('GET', path); }
 async function apiPost(path, data) { return apiRequest('POST', path, data); }
@@ -460,8 +466,8 @@ function showSection(id, btn) {
   if (id === 'reports') generateReport();
 }
 
-window.addEventListener('online',()=>{const e=document.getElementById('connectionState');if(e)e.textContent='● Internet disponible';});
-window.addEventListener('offline',()=>{const e=document.getElementById('connectionState');if(e)e.textContent='● Sin Internet';});
+window.addEventListener('online',()=>setConnectionState(localMode?'● Administrador local de emergencia':'● Internet disponible · base de datos sin verificar',localMode?'local':'unknown'));
+window.addEventListener('offline',()=>setConnectionState(localMode?'● Administrador local de emergencia':'● Sin Internet · base de datos sin verificar',localMode?'local':'unknown'));
 // ==========================================
 // 🏫 GRADOS
 // ==========================================
@@ -1049,6 +1055,9 @@ function sendAnnouncement(){if(!currentProfile||currentProfile.role!=='admin')re
 
 async function loadAdminPanel() {
   if (currentProfile.role !== 'admin') return;
+  const cloudControls=['newUserName','newUserEmail','newUserPassword','newUserRole'];cloudControls.forEach(id=>{const el=document.getElementById(id);if(el)el.disabled=localMode;});
+  const createButton=document.querySelector('#newUserName')?.parentElement?.querySelector('button');if(createButton)createButton.disabled=localMode;
+  document.getElementById('cloudUserNotice').textContent=localMode?'Sesión local de emergencia: no crea usuarios en línea. Inicia sesión con el administrador Appwrite para gestionar cuentas compartidas.':'El administrador Appwrite crea usuarios online. Sus cuentas y perfiles se guardan en la base compartida.';
   const usersRes = {documents:localMode ? await localAll('local_users') : (await apiGet(`/databases/${DB_ID}/collections/${COL.profiles}/documents?limit=100`)).documents};
   const tbody = document.querySelector('#usersTable tbody');
   tbody.innerHTML = '';
@@ -1069,20 +1078,24 @@ async function loadAdminPanel() {
 }
 
 async function createUser() {
+  if(localMode)return alert('Esta es la sesión local de emergencia. Inicia sesión con una cuenta administradora de Appwrite para crear usuarios online.');
+  if(!currentProfile||currentProfile.role!=='admin')return alert('Solo un administrador puede crear usuarios.');
   const name = document.getElementById('newUserName').value.trim();
-  const email = document.getElementById('newUserEmail').value.trim();
+  const email = document.getElementById('newUserEmail').value.trim().toLowerCase();
+  const password = document.getElementById('newUserPassword').value;
   const role = document.getElementById('newUserRole').value;
-  if (!name || !email) return alert("Completa los campos");
+  if (!name || !email || !password) return alert("Completa nombre, correo y contraseña inicial");
+  if(password.length<8)return alert('La contraseña inicial debe tener al menos 8 caracteres.');
   try {
-    if(localMode){const pass='temporal123',salt=localId(),hash=await hashPassword(pass,salt);await localPut('local_users',{$id:localId(),name,email:email.toLowerCase(),role,salt,hash,is_blocked:false});alert(`✅ Usuario local creado. Contraseña temporal: ${pass}`);document.getElementById('newUserName').value='';document.getElementById('newUserEmail').value='';await loadAdminPanel();return;}
-    await apiPost('/account', { userId: 'unique()', email, password: 'temporal123', name });
+    await apiPost('/account', { userId: 'unique()', email, password, name });
     await apiPost(`/databases/${DB_ID}/collections/${COL.profiles}/documents`, {
       documentId: 'unique()',
       data: { full_name: name, email, role, is_blocked: false }
     });
-    alert(`✅ Usuario creado. Contraseña: temporal123`);
+    alert(`✅ Cuenta online creada en Appwrite. Entrega al usuario el correo ${email} y la contraseña inicial que escribiste.`);
     document.getElementById('newUserName').value = '';
     document.getElementById('newUserEmail').value = '';
+    document.getElementById('newUserPassword').value = '';
     await loadAdminPanel();
   } catch (error) { alert('❌ ' + error.message); }
 }
