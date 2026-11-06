@@ -89,6 +89,7 @@ input.cell { width: 55px; padding: 6px; text-align: center; border: 1px solid #c
   <div class="login-box">
     <h2>🏫 PLANI PREPARA</h2>
     <p>PLANI PREPARA · Registro de Asistencia y Calificaciones</p>
+    <div id="loginConnectionState" style="font-size:12px;text-align:center;color:#666;margin:-14px 0 14px;">● Appwrite sin verificar</div>
     <div id="loginMsg"></div>
     <div id="offlineAdminBox" style="display:none;background:#eef6ff;border:1px solid #b7d5f5;padding:12px;border-radius:8px;margin:12px 0;">
       <b>🖥️ Acceso administrador local</b><div id="localAdminHelp" style="font-size:12px;margin:6px 0;">Configura el primer administrador local para esta computadora.</div>
@@ -287,6 +288,7 @@ input.cell { width: 55px; padding: 6px; text-align: center; border: 1px solid #c
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/appwrite@29.0.0"></script>
 <script>
 // ==========================================
 // ⚙️ CONFIGURACIÓN APPWRITE
@@ -294,6 +296,9 @@ input.cell { width: 55px; padding: 6px; text-align: center; border: 1px solid #c
 const APPWRITE_ENDPOINT = 'https://fra.cloud.appwrite.io/v1';
 const APPWRITE_PROJECT_ID = '6ae93a8800004541afa3'; // ✅ TU PROJECT ID CORRECTO
 const DB_ID = '6ae94013000210b1d830';
+// El SDK Web conserva la sesión incluso cuando el navegador bloquea cookies de terceros.
+const appwriteClient = window.Appwrite ? new Appwrite.Client().setEndpoint(APPWRITE_ENDPOINT).setProject(APPWRITE_PROJECT_ID) : null;
+const appwriteAccount = appwriteClient ? new Appwrite.Account(appwriteClient) : null;
 
 // IDs reales de colecciones
 const COL = {
@@ -343,6 +348,33 @@ if(method==='POST'){const obj={...(data.data||{}),$id:data.documentId==='unique(
 if(method==='PUT'){const id=decodeURIComponent(suffix.split('?')[0].replace(/^\//,''));const old=(await localAll(store)).find(x=>x.$id===id)||{};const obj={...old,...(data.data||{}),$id:id,$updatedAt:new Date().toISOString()};await localPut(store,obj);return obj;}
 if(method==='DELETE'){const id=decodeURIComponent(suffix.split('?')[0].replace(/^\//,''));await localDelete(store,id);return {}; }throw Error('Método local no admitido');}
 async function apiRequest(method, path, data = null) {
+  // Auth mediante el SDK: incluye persistencia alternativa en localStorage para incógnito.
+  if (!localMode && appwriteAccount) {
+    try {
+      if (path === '/account' && method === 'GET') {
+        const user = await appwriteAccount.get();
+        setConnectionState('● Appwrite conectado','online');
+        return user;
+      }
+      if (path === '/account' && method === 'POST') {
+        const user = await appwriteAccount.create({userId:data.userId === 'unique()' ? Appwrite.ID.unique() : data.userId,email:data.email,password:data.password,name:data.name});
+        setConnectionState('● Appwrite conectado','online');
+        return user;
+      }
+      if (path === '/account/sessions/email' && method === 'POST') {
+        const session = await appwriteAccount.createEmailPasswordSession({email:data.email,password:data.password});
+        setConnectionState('● Appwrite conectado','online');
+        return session;
+      }
+      if (path === '/account/sessions/current' && method === 'DELETE') {
+        try { await appwriteAccount.deleteSession({sessionId:'current'}); } catch(e) {}
+        return {};
+      }
+    } catch (e) {
+      if (e instanceof TypeError && !navigator.onLine) { localMode=true; return localApi(method,path,data); }
+      throw e;
+    }
+  }
   const options = {
     method: method,
     headers: { 'Content-Type': 'application/json', 'X-Appwrite-Project': APPWRITE_PROJECT_ID },
@@ -351,14 +383,19 @@ async function apiRequest(method, path, data = null) {
   if (data) options.body = JSON.stringify(data);
   if(localMode){setConnectionState('● Administrador local de emergencia','local');return localApi(method,path,data);}
   try {
+    // JWT de corta duración evita depender de cookies entre github.io y appwrite.io.
+    if (appwriteAccount) {
+      const jwt = await appwriteAccount.createJWT();
+      options.headers['X-Appwrite-JWT'] = jwt.jwt;
+    }
     const response = await fetch(`${APPWRITE_ENDPOINT}${path}`, options);
-    if (!response.ok) { const error = await response.json().catch(() => ({ message: response.statusText })); throw new Error(error.message || response.statusText); }
+    if (!response.ok) { const error = await response.json().catch(() => ({ message: response.statusText }));if(response.status===401&&!path.startsWith('/databases/'))setConnectionState('● Appwrite accesible · inicia sesión','online');else setConnectionState(`● Appwrite respondió HTTP ${response.status}`,'error');throw new Error(error.message || response.statusText); }
     setConnectionState(path.startsWith('/databases/')?'● Base Appwrite conectada':'● Appwrite conectado','online');
     return response.json();
-  } catch(err) { if(!navigator.onLine || err instanceof TypeError) { localMode=true; setConnectionState('● Modo local de emergencia','local'); return localApi(method,path,data); } throw err; }
+  } catch(err) { if(!navigator.onLine || err instanceof TypeError) { localMode=true;setConnectionState(navigator.onLine?'● Appwrite no responde (red/CORS) · modo local':'● Sin Internet · modo local','local');return localApi(method,path,data); } throw err; }
 }
 
-function setConnectionState(label,mode='unknown'){const el=document.getElementById('connectionState');if(!el)return;el.textContent=label;el.style.color=mode==='online'?'#155724':mode==='local'?'#856404':'#1e3c72';}
+function setConnectionState(label,mode='unknown'){['connectionState','loginConnectionState'].forEach(id=>{const el=document.getElementById(id);if(!el)return;el.textContent=label;el.style.color=mode==='online'?'#155724':mode==='local'?'#856404':mode==='error'?'#b00020':'#1e3c72';});}
 
 async function apiGet(path) { return apiRequest('GET', path); }
 async function apiPost(path, data) { return apiRequest('POST', path, data); }
@@ -1145,6 +1182,7 @@ async function loadDashboard() {
 // ==========================================
 initAnnouncements();
 showFirstAdminSetup();
+if(location.protocol==='file:')setConnectionState('● Archivo local: para Appwrite abre desde localhost o GitHub Pages','error');
 (async () => {
   try {
     currentUser = await apiGet('/account');
