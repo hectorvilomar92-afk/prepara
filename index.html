@@ -395,7 +395,7 @@ async function apiRequest(method, path, data = null) {
     if (!response.ok) { const error = await response.json().catch(() => ({ message: response.statusText }));if(response.status===401&&!path.startsWith('/databases/'))setConnectionState('● Appwrite accesible · inicia sesión','online');else setConnectionState(`● Appwrite respondió HTTP ${response.status}`,'error');throw new Error(error.message || response.statusText); }
     setConnectionState(path.startsWith('/databases/')?'● Base Appwrite conectada':'● Appwrite conectado','online');
     return response.json();
-  } catch(err) { if(!navigator.onLine || err instanceof TypeError) { localMode=true;setConnectionState(navigator.onLine?'● Appwrite no responde (red/CORS) · modo local':'● Sin Internet · modo local','local');return localApi(method,path,data); } throw err; }
+  } catch(err) { if(!navigator.onLine) { localMode=true;setConnectionState('● Sin Internet · modo local','local');return localApi(method,path,data); } setConnectionState('● No se pudo conectar con Appwrite · revisa la conexión o actualiza la app','error');throw err; }
 }
 
 function setConnectionState(label,mode='unknown'){['connectionState','loginConnectionState'].forEach(id=>{const el=document.getElementById(id);if(!el)return;el.textContent=label;el.style.color=mode==='online'?'#155724':mode==='local'?'#856404':mode==='error'?'#b00020':'#1e3c72';});}
