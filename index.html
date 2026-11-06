@@ -91,11 +91,6 @@ input.cell { width: 55px; padding: 6px; text-align: center; border: 1px solid #c
     <p>PLANI PREPARA · Registro de Asistencia y Calificaciones</p>
     <div id="loginConnectionState" style="font-size:12px;text-align:center;color:#666;margin:-14px 0 14px;">● Appwrite sin verificar</div>
     <div id="loginMsg"></div>
-    <div id="offlineAdminBox" style="display:none;background:#eef6ff;border:1px solid #b7d5f5;padding:12px;border-radius:8px;margin:12px 0;">
-      <b>🖥️ Acceso administrador local</b><div id="localAdminHelp" style="font-size:12px;margin:6px 0;">Configura el primer administrador local para esta computadora.</div>
-      <button class="btn btn-info btn-block" id="localAdminSetupButton" onclick="setupLocalAdmin()">Crear administrador local</button>
-      <div id="localAdminForm" style="display:none;margin-top:8px;"><input id="localAdminName" placeholder="Nombre del administrador"><input id="localAdminEmail" type="email" placeholder="Correo local"><input id="localAdminPass" type="password" placeholder="Contraseña (mín. 8 caracteres)"><button class="btn btn-success btn-block" onclick="saveLocalAdmin()">Guardar administrador local</button></div>
-    </div>
     <div id="loginForm">
       <p style="font-size:12px;margin:-12px 0 10px;color:#555;">Para usar datos compartidos, inicia sesión con una cuenta Appwrite. El administrador local es solo respaldo de esta computadora.</p>
       <input type="email" id="loginEmail" placeholder="📧 Correo electrónico">
@@ -155,7 +150,7 @@ input.cell { width: 55px; padding: 6px; text-align: center; border: 1px solid #c
     <div id="attendance" class="section">
       <h3>📋 Registro de Asistencia</h3>
       <div class="config-grid">
-        <label>Asignatura: <select id="asistMateria"><option value="">-- Selecciona asignatura --</option></select></label>
+        <label>Asignatura: <select id="asistMateria" onchange="onAttendanceSubjectChange()"><option value="">-- Selecciona asignatura --</option></select></label>
         <label>Docente: <input type="text" id="asistDocente"></label>
         <label>Grado: <select id="asistGrade" onchange="onAsistChange()"></select></label>
         <label>Mes: <select id="asistMes" onchange="onAsistChange()">
@@ -184,6 +179,11 @@ input.cell { width: 55px; padding: 6px; text-align: center; border: 1px solid #c
       <div style="margin-top: 20px;">
         <button class="btn btn-success" onclick="saveAttendance()">💾 Guardar</button>
         <button class="btn btn-secondary" onclick="printSection('attendanceGrid', 'Pase de Lista')">🖨️ Imprimir</button>
+      </div>
+      <div class="config-grid" style="margin-top:20px;align-items:end;">
+        <button class="btn btn-info" onclick="loadSavedAttendanceList()">📂 Buscar pases guardados</button>
+        <label>Pase guardado: <select id="savedAttendanceSelect"><option value="">-- Busca por grado y asignatura --</option></select></label>
+        <button class="btn btn-warning" onclick="openSavedAttendance()">Abrir pase seleccionado</button>
       </div>
     </div>
     <div id="grades" class="section">
@@ -225,6 +225,9 @@ input.cell { width: 55px; padding: 6px; text-align: center; border: 1px solid #c
         <button class="btn btn-success" onclick="createUser()">➕ Crear</button>
       </div>
       <table id="usersTable"><thead><tr><th>Nombre</th><th>Email</th><th>Rol</th><th>Estado</th><th>Acciones</th></tr></thead><tbody></tbody></table>
+      <h4 style="margin-top:24px;">🖥️ Administrador local de emergencia</h4>
+      <p style="font-size:13px;color:#555;">Solo el administrador puede crear o actualizar el respaldo local de esta computadora.</p>
+      <div class="form-row"><input type="text" id="localAdminName" placeholder="Nombre del administrador local" style="flex:1;"><input type="email" id="localAdminEmail" placeholder="Correo local" style="flex:1;"><input type="password" id="localAdminPass" placeholder="Contraseña local (mín. 8)" style="flex:1;"><button class="btn btn-info" onclick="saveLocalAdmin()">Guardar administrador local</button></div>
       <h4 style="margin-top: 30px;">🏫 Grados</h4>
       <div class="form-row">
         <select id="adminTeacher"></select>
@@ -314,7 +317,7 @@ let currentUser = null;
 let currentProfile = null;
 function isAdminUser(){return !!currentProfile && currentProfile.role === 'admin';}
 function requireAdminAction(){if(isAdminUser())return true;alert('⛔ Esta opción está disponible solo para el administrador.');return false;}
-let asistDates = [];
+let asistDates = [], asistMarks = {}, attendanceSavedRecords = [], attendanceLoadedId = '', attendanceContext = '';
 const monthNames = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 
 // ==========================================
@@ -328,10 +331,8 @@ async function localPut(store,obj){const db=await openLocalDB();return new Promi
 async function localDelete(store,id){const db=await openLocalDB();return new Promise((res,rej)=>{const tx=db.transaction(store,'readwrite');tx.objectStore(store).delete(id);tx.oncomplete=()=>res({});tx.onerror=()=>rej(tx.error);});}
 function localId(){return 'local_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8);}
 async function hashPassword(password,salt){const enc=new TextEncoder();const key=await crypto.subtle.importKey('raw',enc.encode(password),'PBKDF2',false,['deriveBits']);const bits=await crypto.subtle.deriveBits({name:'PBKDF2',salt:enc.encode(salt),iterations:120000,hash:'SHA-256'},key,256);return [...new Uint8Array(bits)].map(x=>x.toString(16).padStart(2,'0')).join('');}
-async function setupLocalAdmin(){document.getElementById('localAdminForm').style.display='block'; const users=await localAll('local_users');if(users.some(u=>u.role==='admin')){document.getElementById('localAdminName').value='Administrador local';document.getElementById('localAdminEmail').value=users.find(u=>u.role==='admin').email;showMsg('Ya existe un administrador local. Puedes actualizar su contraseña.','success');}}
-async function saveLocalAdmin(){const name=document.getElementById('localAdminName').value.trim(),email=document.getElementById('localAdminEmail').value.trim().toLowerCase(),pass=document.getElementById('localAdminPass').value;if(!name||!email||pass.length<8)return showMsg('Completa nombre, correo y contraseña de 8 caracteres.');const salt=localId(),hash=await hashPassword(pass,salt);const users=await localAll('local_users');const old=users.find(u=>u.role==='admin');await localPut('local_users',{$id:old?old.$id:localId(),name,email,role:'admin',salt,hash,is_blocked:false});showMsg('Administrador local guardado. Ya puedes iniciar sesión sin Internet.','success');document.getElementById('loginEmail').value=email;document.getElementById('loginPassword').value='';document.getElementById('localAdminForm').style.display='none';document.getElementById('offlineAdminBox').style.display='none';}
+async function saveLocalAdmin(){if(!requireAdminAction())return;const name=document.getElementById('localAdminName').value.trim(),email=document.getElementById('localAdminEmail').value.trim().toLowerCase(),pass=document.getElementById('localAdminPass').value;if(!name||!email||pass.length<8)return alert('Completa nombre, correo y contraseña de al menos 8 caracteres.');const salt=localId(),hash=await hashPassword(pass,salt);const users=await localAll('local_users');const old=users.find(u=>u.role==='admin');await localPut('local_users',{$id:old?old.$id:localId(),name,email,role:'admin',salt,hash,is_blocked:false});document.getElementById('localAdminPass').value='';alert('✅ Administrador local guardado en esta computadora.');}
 async function localLogin(email,password){const users=await localAll('local_users'),u=users.find(x=>x.email===email.toLowerCase()&&x.role==='admin');if(!u)return null;const h=await hashPassword(password,u.salt);if(h!==u.hash||u.is_blocked)return null;localMode=true;localSession=u;setConnectionState('● Administrador local de emergencia','local');return {$id:u.$id,email:u.email,name:u.name};}
-async function showFirstAdminSetup(){try{const users=await localAll('local_users');const exists=users.some(u=>u.role==='admin');document.getElementById('offlineAdminBox').style.display='block';document.getElementById('localAdminHelp').textContent=exists?'Si no recuerdas la contraseña, puedes restablecer el acceso del administrador de esta computadora.':'Configura el primer administrador local para esta computadora.';document.getElementById('localAdminSetupButton').textContent=exists?'Restablecer acceso del administrador local':'Crear administrador local';}catch(e){console.warn('No se pudo comprobar el administrador local.',e);}}
 const DEFAULT_SUBJECTS=['Lengua Española','Matemáticas','Ciencias Sociales (Historia, Geografía y Cívica)','Ciencias de la Naturaleza (Biología, Química y Física)','Inglés','Francés','Formación Integral Humana y Religiosa (FIHR)','Educación Artística','Educación Física'];
 const normalizeSubject=value=>String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
 async function ensureSubjectsForGrade(gradeId,allowCreate=isAdminUser()){if(!gradeId)return [];const result=await apiGet(`/databases/${DB_ID}/collections/${COL.subjects}/documents?limit=100`);let subjects=result.documents.filter(s=>s.grade_id===gradeId);if(allowCreate){for(const name of DEFAULT_SUBJECTS){if(!subjects.some(s=>normalizeSubject(s.name)===normalizeSubject(name))){try{subjects.push(await apiPost(`/databases/${DB_ID}/collections/${COL.subjects}/documents`,{documentId:'unique()',data:{grade_id:gradeId,name}}));}catch(err){console.warn('No se pudo crear la asignatura '+name,err.message);}}}}return subjects.sort((a,b)=>String(a.name).localeCompare(String(b.name),'es'));}
@@ -676,12 +677,15 @@ async function processExcel(workbook) {
 let asistStudents = [];
 
 function onAsistChange() {
+  const context=[document.getElementById('asistGrade').value,document.getElementById('asistMes').value,document.getElementById('asistYear').value].join('|');
+  if(context!==attendanceContext){asistDates=[];asistMarks={};attendanceLoadedId='';attendanceContext=context;}
   loadAttendanceSubjects();
   if (!asistDates || asistDates.length !== getDaysInMonth()) {
     asistDates = new Array(getDaysInMonth()).fill(null);
   }
   renderAttendanceGrid();
 }
+function onAttendanceSubjectChange(){attendanceLoadedId='';asistMarks={};renderAttendanceGrid();}
 function getDaysInMonth() {
   const m = parseInt(document.getElementById('asistMes').value);
   const y = parseInt(document.getElementById('asistYear').value);
@@ -715,6 +719,7 @@ function generateDates() {
 
 function clearDates() {
   asistDates = new Array(getDaysInMonth()).fill(null);
+  asistMarks = {};
   renderAttendanceGrid();
   document.getElementById('datesInfo').textContent = '';
 }
@@ -758,8 +763,9 @@ async function renderAttendanceGrid() {
       html += `<tr data-student="${s.$id}"><td>${s.order_number}</td><td style="text-align:left;white-space:nowrap;">${s.last_name}, ${s.first_name}</td>`;
       for (let i = 1; i <= days; i++) {
         const enabled = asistDates[i-1] !== null;
+        const savedMark=asistMarks[s.$id]?.[i-1]||'';
         html += `<td><select class="cell asist-mark" data-day="${i-1}" ${enabled?'':'disabled'} style="width:48px;padding:4px;">
-          <option value="">-</option><option value="P">P</option><option value="A">A</option><option value="T">T</option><option value="E">E</option>
+          <option value="" ${savedMark===''?'selected':''}>-</option><option value="P" ${savedMark==='P'?'selected':''}>P</option><option value="A" ${savedMark==='A'?'selected':''}>A</option><option value="T" ${savedMark==='T'?'selected':''}>T</option><option value="E" ${savedMark==='E'?'selected':''}>E</option>
         </select></td>`;
       }
       html += `<td class="asist-p" style="font-weight:bold;color:#28a745;">0</td><td class="asist-a" style="font-weight:bold;color:#dc3545;">0</td><td class="asist-pct">0%</td></tr>`;
@@ -769,21 +775,12 @@ async function renderAttendanceGrid() {
   html += '<p style="margin-top:10px;font-size:12px;color:#666;">Leyenda: <b>P</b>=Presente · <b>A</b>=Ausente · <b>T</b>=Tardanza · <b>E</b>=Excusa</p>';
   document.getElementById('attendanceGrid').innerHTML = html;
   document.querySelectorAll('.asist-mark').forEach(sel => {
-    sel.addEventListener('change', () => {
-      const row = sel.closest('tr');
-      let p=0,a=0,total=0;
-      row.querySelectorAll('.asist-mark').forEach(s => {
-        if (s.disabled || !s.value) return;
-        total++;
-        if (s.value==='P'||s.value==='T'||s.value==='E') p++;
-        if (s.value==='A') a++;
-      });
-      row.querySelector('.asist-p').textContent = p;
-      row.querySelector('.asist-a').textContent = a;
-      row.querySelector('.asist-pct').textContent = total ? Math.round(p/total*100)+'%' : '0%';
-    });
+    sel.addEventListener('change', () => updateAttendanceSummary(sel.closest('tr')));
   });
+  document.querySelectorAll('#attendanceGrid tbody tr[data-student]').forEach(updateAttendanceSummary);
 }
+
+function updateAttendanceSummary(row){if(!row)return;let p=0,a=0,total=0;row.querySelectorAll('.asist-mark').forEach(s=>{if(s.disabled||!s.value)return;total++;if(s.value==='P'||s.value==='T'||s.value==='E')p++;if(s.value==='A')a++;});const pCell=row.querySelector('.asist-p'),aCell=row.querySelector('.asist-a'),pctCell=row.querySelector('.asist-pct');if(pCell)pCell.textContent=p;if(aCell)aCell.textContent=a;if(pctCell)pctCell.textContent=total?Math.round(p/total*100)+'%':'0%';}
 
 function updateDate(idx, val) {
   if (val) {
@@ -809,17 +806,52 @@ async function saveAttendance() {
     marks[sid] = days;
   });
   try {
-    await apiPost(`/databases/${DB_ID}/collections/${COL.attendance_records}/documents`, {
-      documentId: 'unique()',
-      data: {
+    const recordData={
         user_id: currentUser.$id, materia, subject_id: materiaId, docente, grade_id: gradeId,
         mes: mes.toString(), year: year.toString(),
         dates: JSON.stringify(asistDates),
         marks: JSON.stringify(marks)
-      }
-    });
-    alert('✅ Asistencia guardada');
+      };
+    let saved;
+    if(attendanceLoadedId){saved=await apiPut(`/databases/${DB_ID}/collections/${COL.attendance_records}/documents/${attendanceLoadedId}`,{data:recordData});}
+    else {saved=await apiPost(`/databases/${DB_ID}/collections/${COL.attendance_records}/documents`,{documentId:'unique()',data:recordData});}
+    attendanceLoadedId=saved.$id;asistMarks=marks;
+    await loadSavedAttendanceList(attendanceLoadedId);
+    alert('✅ Pase de lista guardado. Puedes volver a abrirlo desde “Buscar pases guardados”.');
   } catch (e) { alert('❌ ' + e.message); }
+}
+
+async function loadSavedAttendanceList(selectId=''){
+  const gradeId=document.getElementById('asistGrade').value,subjectId=document.getElementById('asistMateria').value,sel=document.getElementById('savedAttendanceSelect');
+  if(!gradeId||!subjectId){if(sel)sel.innerHTML='<option value="">-- Selecciona grado y asignatura --</option>';return alert('Selecciona primero el grado y la asignatura del pase.');}
+  try{
+    const result=await apiGet(`/databases/${DB_ID}/collections/${COL.attendance_records}/documents?limit=100`);
+    attendanceSavedRecords=result.documents.filter(r=>r.grade_id===gradeId&&r.subject_id===subjectId).sort((a,b)=>String(b.year).localeCompare(String(a.year))||Number(b.mes)-Number(a.mes)||String(b.$createdAt||'').localeCompare(String(a.$createdAt||'')));
+    sel.innerHTML='';
+    if(!attendanceSavedRecords.length){sel.add(new Option('-- No hay pases guardados para este grado y asignatura --',''));return alert('No se encontraron pases guardados para esta selección.');}
+    sel.add(new Option('-- Selecciona un pase guardado --',''));
+    attendanceSavedRecords.forEach(r=>{const month=monthNames[Number(r.mes)]||`Mes ${r.mes}`;const label=`${month} ${r.year||''} · ${r.docente||'Docente'}${r.$createdAt?' · '+new Date(r.$createdAt).toLocaleDateString():''}`;sel.add(new Option(label,r.$id));});
+    if(selectId)sel.value=selectId;
+  }catch(e){alert('❌ No se pudieron buscar los pases guardados: '+e.message);}
+}
+
+async function openSavedAttendance(){
+  const id=document.getElementById('savedAttendanceSelect').value;if(!id)return alert('Selecciona un pase guardado.');
+  try{
+    const record=attendanceSavedRecords.find(r=>r.$id===id)||await apiGet(`/databases/${DB_ID}/collections/${COL.attendance_records}/documents/${id}`);
+    document.getElementById('asistGrade').value=record.grade_id;
+    document.getElementById('asistMes').value=String(Number(record.mes));
+    document.getElementById('asistYear').value=record.year;
+    attendanceContext=[record.grade_id,document.getElementById('asistMes').value,record.year].join('|');
+    await loadAttendanceSubjects();
+    document.getElementById('asistMateria').value=record.subject_id;
+    document.getElementById('asistDocente').value=record.docente||'';
+    asistDates=JSON.parse(record.dates||'[]');
+    asistMarks=JSON.parse(record.marks||'{}');
+    attendanceLoadedId=record.$id;
+    document.getElementById('datesInfo').textContent=`Pase guardado: ${monthNames[Number(record.mes)]||''} ${record.year||''}`;
+    await renderAttendanceGrid();
+  }catch(e){alert('❌ No se pudo abrir el pase guardado: '+e.message);}
 }
 
 const CENTER_CONFIG_KEY='plani_prepara_center_config';
@@ -1192,7 +1224,6 @@ async function loadDashboard() {
 // 🚀 INICIALIZAR
 // ==========================================
 initAnnouncements();
-showFirstAdminSetup();
 if(location.protocol==='file:')setConnectionState('● Archivo local: para Appwrite abre desde localhost o GitHub Pages','error');
 (async () => {
   try {
