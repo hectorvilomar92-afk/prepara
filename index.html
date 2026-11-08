@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>PLANI PREPARA</title>
 <script src="./xlsx.full.min.js" onerror="window.xlsxLoadError=true;console.error('No se pudo cargar el lector XLSX local. Mantén xlsx.full.min.js junto al HTML.')"></script>
 <style>
@@ -135,7 +138,7 @@ input.cell { width: 55px; padding: 6px; text-align: center; border: 1px solid #c
       <div class="config-grid"><label>Grado/Sección: <select id="selGrade" onchange="loadStudents()"></select></label></div>
       <div class="excel-upload admin-only">
         <h4>📥 Importar desde Excel</h4>
-        <p style="font-size:12px;color:#555;margin:6px 0;">Acepta las columnas Apellidos y Nombres. Para ubicar cada grupo, agrega Grado y Sección, usa una hoja por grupo con nombre como "1ro A", o selecciona un grado arriba si el archivo contiene un solo grupo.</p>
+        <p style="font-size:12px;color:#555;margin:6px 0;">Acepta las columnas Apellidos y Nombres. Para ubicar cada grupo, agrega Grado y Sección, usa una hoja por grupo con nombre como “1ro A”, o selecciona un grado arriba si el archivo contiene un solo grupo.</p>
         <input type="file" id="excelFile" accept=".xlsx,.xls" onchange="showExcelSelection(event)" style="margin: 10px 0;">
         <button class="btn btn-info" onclick="document.getElementById('excelFile').click()">Seleccionar Archivo</button>
         <span id="excelFileName" style="font-size:13px;margin:0 8px;color:#555;">Ningún archivo seleccionado</span>
@@ -285,13 +288,21 @@ input.cell { width: 55px; padding: 6px; text-align: center; border: 1px solid #c
 </div>
 
 <script>
+// 🧹 LIMPIEZA AUTOMÁTICA DE SERVICE WORKERS VIEJOS (Adiós al caché fantasma)
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then(registrations => {
+    registrations.forEach(reg => reg.unregister());
+  });
+}
+
 // ==========================================
 // ⚙️ CONFIGURACIÓN APPWRITE
 // ==========================================
 const APPWRITE_ENDPOINT = 'https://fra.cloud.appwrite.io/v1';
-const APPWRITE_PROJECT_ID = '6ae93a8800004541afa3';
+const APPWRITE_PROJECT_ID = '6ae93a8800004541afa3'; // ✅ TU PROJECT ID CORRECTO
 const DB_ID = '6ae94013000210b1d830';
 
+// IDs reales de colecciones
 const COL = {
   profiles: '6ae940bd00384da2ca8f',
   grades: '6ae94373001c57222974',
@@ -304,10 +315,8 @@ const COL = {
 let currentUser = null;
 let currentProfile = null;
 let asistDates = [];
+let appwriteJWT = null; // 🔑 Token para evitar bloqueos de CORS/Cookies
 const monthNames = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
-
-// 🔑 CORRECCIÓN JWT: Variable global para guardar el token
-let appwriteJWT = null;
 
 // ==========================================
 // 🔧 FUNCIONES API REST
@@ -341,11 +350,14 @@ if(method==='POST'){const obj={...(data.data||{}),$id:data.documentId==='unique(
 if(method==='PUT'){const id=decodeURIComponent(suffix.split('?')[0].replace(/^\//,''));const old=(await localAll(store)).find(x=>x.$id===id)||{};const obj={...old,...(data.data||{}),$id:id,$updatedAt:new Date().toISOString()};await localPut(store,obj);return obj;}
 if(method==='DELETE'){const id=decodeURIComponent(suffix.split('?')[0].replace(/^\//,''));await localDelete(store,id);return {}; }throw Error('Método local no admitido');}
 
-// 🔑 CORRECCIÓN JWT: apiRequest ahora usa el token JWT
+// 🔑 API REQUEST CON JWT Y CACHE-BUSTING
 async function apiRequest(method, path, data = null) {
   const headers = { 
     'Content-Type': 'application/json', 
-    'X-Appwrite-Project': APPWRITE_PROJECT_ID 
+    'X-Appwrite-Project': APPWRITE_PROJECT_ID,
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    'Pragma': 'no-cache',
+    'Expires': '0'
   };
   
   // Si tenemos JWT y no es una petición de login, usar el JWT
@@ -356,14 +368,21 @@ async function apiRequest(method, path, data = null) {
   const options = {
     method: method,
     headers: headers,
-    credentials: 'include'
+    credentials: 'include',
+    cache: 'no-store'
   };
   
   if (data) options.body = JSON.stringify(data);
   if(localMode) return localApi(method,path,data);
   
+  let url = `${APPWRITE_ENDPOINT}${path}`;
+  // Añadir timestamp solo a peticiones GET para evitar caché del navegador
+  if (method === 'GET') {
+    url += `${path.includes('?') ? '&' : '?'}_t=${Date.now()}`;
+  }
+  
   try {
-    const response = await fetch(`${APPWRITE_ENDPOINT}${path}`, options);
+    const response = await fetch(url, options);
     if (!response.ok) { 
       const error = await response.json().catch(() => ({ message: response.statusText })); 
       throw new Error(error.message || response.statusText); 
@@ -400,7 +419,6 @@ function toggleRegister() {
   rf.style.display = rf.style.display === 'none' ? 'block' : 'none';
 }
 
-// 🔑 CORRECCIÓN JWT: handleLogin ahora crea el JWT después del login
 async function handleLogin() {
   const email = document.getElementById('loginEmail').value.trim();
   const password = document.getElementById('loginPassword').value;
@@ -431,6 +449,11 @@ async function handleRegister() {
     await apiPost('/account', { userId: 'unique()', email, password, name });
     await apiPost('/account/sessions/email', { email, password });
     currentUser = await apiGet('/account');
+    
+    // 🔑 Crear JWT
+    const jwtResponse = await apiPost('/account/jwts', {});
+    appwriteJWT = jwtResponse.jwt;
+    
     await apiPost(`/databases/${DB_ID}/collections/${COL.profiles}/documents`, {
       documentId: 'unique()',
       data: { full_name: name, email: email, role: 'docente', is_blocked: false }
@@ -445,6 +468,7 @@ async function loadProfile() {
     if (localMode && localSession) {
       currentProfile={ $id:localSession.$id, full_name:localSession.name, email:localSession.email, role:localSession.role, is_blocked:localSession.is_blocked };
     } else {
+    // ✅ TRUCO: Obtener todos los perfiles (máx 100) y filtrar en JS para evitar error de "queries"
     const result = await apiGet(`/databases/${DB_ID}/collections/${COL.profiles}/documents?limit=100`);
     const profile = result.documents.find(p => p.email === currentUser.email);
     
@@ -475,9 +499,8 @@ async function loadProfile() {
   }
 }
 
-// 🔑 CORRECCIÓN JWT: handleLogout limpia el JWT
 async function handleLogout() {
-  appwriteJWT = null;
+  appwriteJWT = null; // Limpiar JWT
   try { await apiDelete('/account/sessions/current'); } catch(e) {}
   location.reload();
 }
@@ -500,6 +523,7 @@ async function loadGradesSelects() {
   try {
     await ensureDefaultGrades();
     const result = await apiGet(`/databases/${DB_ID}/collections/${COL.grades}/documents?limit=100`);
+    // Todos los maestros ven todos los grados
     const myGrades = result.documents.sort(sortGrades);
     
     const selects = ['selGrade', 'asistGrade', 'gradeGrade', 'boletinGrade', 'reportGrade'];
@@ -844,6 +868,7 @@ async function loadSubjects() {
     const mySubjects = await ensureSubjectsForGrade(gradeId);
 
     if (mySubjects.length === 0) {
+      // Fallback: usar nombres sin ID (solo visual) - no se podrá guardar hasta crear subjects
       DEFAULT_SUBJECTS.forEach((name, i) => { sel.innerHTML += `<option value="__tmp_${i}">${name}</option>`; });
       alert('⚠️ No se pudieron crear asignaturas en la base. Revisa permisos de subjects.');
     } else {
@@ -858,6 +883,7 @@ async function loadSubjects() {
   }
 }
 
+// El selector de asistencia usa los mismos registros de asignaturas del grado.
 async function loadAttendanceSubjects() {
   const gradeId = document.getElementById('asistGrade').value;
   const sel = document.getElementById('asistMateria');
@@ -1014,6 +1040,7 @@ async function generateBoletin() {
     const status = avg >= 70 ? 'PROMOVIDO/A' : (avg >= 60 ? 'CON ASIGNATURA PENDIENTE' : (count ? 'APLAZADO' : 'SIN CALIFICACIONES'));
     document.getElementById('bStatus').textContent = `${status} - Promedio: ${avg}`;
 
+    // Mostrar vista previa en pantalla también
     document.getElementById('boletinView').style.display = 'block';
     document.getElementById('boletinView').scrollIntoView({ behavior: 'smooth' });
   } catch (e) {
@@ -1162,7 +1189,14 @@ showFirstAdminSetup();
 (async () => {
   try {
     currentUser = await apiGet('/account');
-    if (currentUser) await loadProfile();
+    if (currentUser) {
+      // 🔑 Renovar JWT al recargar la página si ya había sesión
+      try {
+        const jwtResponse = await apiPost('/account/jwts', {});
+        appwriteJWT = jwtResponse.jwt;
+      } catch(e) { console.warn('No se pudo renovar JWT', e); }
+      await loadProfile();
+    }
   } catch (e) {}
 })();
 </script>
