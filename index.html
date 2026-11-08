@@ -350,6 +350,26 @@ const store=collectionFromPath(path);if(!store)throw Error('Operación local no 
 if(method==='POST'){const obj={...(data.data||{}),$id:data.documentId==='unique()'?localId():data.documentId,$createdAt:new Date().toISOString(),$updatedAt:new Date().toISOString()};await localPut(store,obj);return obj;}
 if(method==='PUT'){const id=decodeURIComponent(suffix.split('?')[0].replace(/^\//,''));const old=(await localAll(store)).find(x=>x.$id===id)||{};const obj={...old,...(data.data||{}),$id:id,$updatedAt:new Date().toISOString()};await localPut(store,obj);return obj;}
 if(method==='DELETE'){const id=decodeURIComponent(suffix.split('?')[0].replace(/^\//,''));await localDelete(store,id);return {}; }throw Error('Método local no admitido');}
+function adaptTablesDBRequest(method,path,data){
+  const match=path.match(/^\/databases\/([^/]+)\/collections\/([^/]+)\/documents(?:\/([^/?]+))?(?:\?([^#]*))?$/);
+  if(!match)return {path,data,isTableList:false};
+  const [,databaseId,tableId,rowId,queryString]=match;
+  const params=new URLSearchParams(queryString||'');
+  const limit=params.get('limit');
+  params.delete('limit');
+  if(limit!==null){
+    const parsedLimit=Number(limit);
+    if(Number.isInteger(parsedLimit)&&parsedLimit>0)params.append('queries[]',JSON.stringify({method:'limit',values:[parsedLimit]}));
+  }
+  const query=params.toString();
+  const rowPath=`/tablesdb/${encodeURIComponent(databaseId)}/tables/${encodeURIComponent(tableId)}/rows`;
+  const mappedPath=`${rowPath}${rowId?`/${encodeURIComponent(decodeURIComponent(rowId))}`:''}${query?`?${query}`:''}`;
+  let mappedData=data;
+  if(method==='POST'&&data){
+    mappedData={rowId:data.documentId==='unique()'?Appwrite.ID.unique():data.documentId,data:data.data||{}};
+  }
+  return {path:mappedPath,data:mappedData,isTableList:method==='GET'&&!rowId};
+}
 async function apiRequest(method, path, data = null) {
   // Auth mediante el SDK: incluye persistencia alternativa en localStorage para incógnito.
   if (!localMode && appwriteAccount) {
@@ -378,12 +398,13 @@ async function apiRequest(method, path, data = null) {
       throw e;
     }
   }
+  const tablesRequest=adaptTablesDBRequest(method,path,data);
   const options = {
     method: method,
     headers: { 'Content-Type': 'application/json', 'X-Appwrite-Project': APPWRITE_PROJECT_ID },
     credentials: 'include'
   };
-  if (data) options.body = JSON.stringify(data);
+  if (tablesRequest.data) options.body = JSON.stringify(tablesRequest.data);
   if(localMode){setConnectionState('● Administrador local de emergencia','local');return localApi(method,path,data);}
   try {
     // JWT de corta duración evita depender de cookies entre github.io y appwrite.io.
@@ -391,10 +412,11 @@ async function apiRequest(method, path, data = null) {
       const jwt = await appwriteAccount.createJWT();
       options.headers['X-Appwrite-JWT'] = jwt.jwt;
     }
-    const response = await fetch(`${APPWRITE_ENDPOINT}${path}`, options);
+    const response = await fetch(`${APPWRITE_ENDPOINT}${tablesRequest.path}`, options);
     if (!response.ok) { const error = await response.json().catch(() => ({ message: response.statusText }));if(response.status===401&&!path.startsWith('/databases/'))setConnectionState('● Appwrite accesible · inicia sesión','online');else setConnectionState(`● Appwrite respondió HTTP ${response.status}`,'error');throw new Error(error.message || response.statusText); }
     setConnectionState(path.startsWith('/databases/')?'● Base Appwrite conectada':'● Appwrite conectado','online');
-    return response.json();
+    const result=await response.json();
+    return tablesRequest.isTableList?{...result,documents:result.rows||[]}:result;
   } catch(err) {
     if(!navigator.onLine) {
       localMode=true;
