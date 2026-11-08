@@ -407,11 +407,7 @@ async function apiRequest(method, path, data = null) {
   if (tablesRequest.data) options.body = JSON.stringify(tablesRequest.data);
   if(localMode){setConnectionState('● Administrador local de emergencia','local');return localApi(method,path,data);}
   try {
-    // JWT de corta duración evita depender de cookies entre github.io y appwrite.io.
-    if (appwriteAccount) {
-      const jwt = await appwriteAccount.createJWT();
-      options.headers['X-Appwrite-JWT'] = jwt.jwt;
-    }
+    
     const response = await fetch(`${APPWRITE_ENDPOINT}${tablesRequest.path}`, options);
     if (!response.ok) { const error = await response.json().catch(() => ({ message: response.statusText }));if(response.status===401&&!path.startsWith('/databases/'))setConnectionState('● Appwrite accesible · inicia sesión','online');else setConnectionState(`● Appwrite respondió HTTP ${response.status}`,'error');throw new Error(error.message || response.statusText); }
     setConnectionState(path.startsWith('/databases/')?'● Base Appwrite conectada':'● Appwrite conectado','online');
