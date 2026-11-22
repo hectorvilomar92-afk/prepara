@@ -42,6 +42,11 @@ table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 13p
 th, td { border: 1px solid #dee2e6; padding: 8px; text-align: center; }
 th { background: #f8f9fa; }
 input.cell { width: 55px; padding: 6px; text-align: center; border: 1px solid #ccc; border-radius: 4px; }
+.competency-descriptions { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; margin: 14px 0; }
+.competency-descriptions label { display: flex; flex-direction: column; gap: 5px; font-size: 13px; font-weight: bold; }
+.competency-descriptions select, .competency-descriptions textarea { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 5px; font-size: 12px; }
+.competency-descriptions textarea { min-height: 84px; resize: vertical; }
+.competency-descriptions textarea[readonly] { background: #f8f9fa; }
 .status-promovido { color: #28a745; font-weight: bold; }
 .status-aplazado { color: #dc3545; font-weight: bold; }
 .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-top: 20px; }
@@ -92,7 +97,7 @@ input.cell { width: 55px; padding: 6px; text-align: center; border: 1px solid #c
     <div id="loginConnectionState" style="font-size:12px;text-align:center;color:#666;margin:-14px 0 14px;">● Appwrite sin verificar</div>
     <div id="loginMsg"></div>
     <div id="loginForm">
-      <p style="font-size:12px;margin:-12px 0 10px;color:#555;">Para usar datos compartidos, inicia sesión con una cuenta Appwrite. El administrador local es solo respaldo de esta computadora.</p>
+      <p style="font-size:12px;margin:-12px 0 10px;color:#555;">Inicia sesión con tu cuenta Appwrite para acceder a los datos compartidos.</p>
       <input type="email" id="loginEmail" placeholder="📧 Correo electrónico">
       <input type="password" id="loginPassword" placeholder="🔒 Contraseña">
       <button class="btn btn-block" onclick="handleLogin()">🔑 Iniciar Sesión</button>
@@ -192,11 +197,15 @@ input.cell { width: 55px; padding: 6px; text-align: center; border: 1px solid #c
         <label>Grado: <select id="gradeGrade" onchange="loadSubjects()"></select></label>
         <label>Asignatura: <select id="gradeSubject" onchange="loadGradesTable()"></select></label>
       </div>
+      <p id="competencyInstructions" style="font-size:13px;color:#555;margin:12px 0;">Selecciona la competencia oficial que corresponde a cada grupo o usa una descripción personalizada. El PC promedia los cuatro períodos; si hay RP, se toma la nota de recuperación para ese período. La calificación final promedia PC1–PC4.</p>
+      <div id="competencyDescriptions" class="competency-descriptions"></div>
+      <p id="competencySource" style="font-size:12px;color:#555;margin:-4px 0 14px;"></p>
+      <div id="gradeLegacyNotice"></div>
       <button class="btn btn-info" onclick="loadGradesTable()">📊 Cargar Tabla</button>
       <div id="gradesGrid" style="overflow-x: auto; margin-top: 20px;"></div>
       <div style="margin-top: 20px;">
         <button class="btn btn-success" onclick="saveGrades()">💾 Guardar Notas</button>
-        <button class="btn btn-secondary" onclick="printSection('gradesGrid', 'Calificaciones')">🖨️ Imprimir</button>
+        <button class="btn btn-secondary" onclick="printSection('grades', 'Registro de Calificaciones')">🖨️ Imprimir</button>
       </div>
     </div>
     <div id="boletin" class="section">
@@ -225,9 +234,6 @@ input.cell { width: 55px; padding: 6px; text-align: center; border: 1px solid #c
         <button class="btn btn-success" onclick="createUser()">➕ Crear</button>
       </div>
       <table id="usersTable"><thead><tr><th>Nombre</th><th>Email</th><th>Rol</th><th>Estado</th><th>Acciones</th></tr></thead><tbody></tbody></table>
-      <h4 style="margin-top:24px;">🖥️ Administrador local de emergencia</h4>
-      <p style="font-size:13px;color:#555;">Solo el administrador puede crear o actualizar el respaldo local de esta computadora.</p>
-      <div class="form-row"><input type="text" id="localAdminName" placeholder="Nombre del administrador local" style="flex:1;"><input type="email" id="localAdminEmail" placeholder="Correo local" style="flex:1;"><input type="password" id="localAdminPass" placeholder="Contraseña local (mín. 8)" style="flex:1;"><button class="btn btn-info" onclick="saveLocalAdmin()">Guardar administrador local</button></div>
       <h4 style="margin-top: 30px;">🏫 Grados</h4>
       <div class="form-row">
         <select id="adminTeacher"></select>
@@ -272,12 +278,7 @@ input.cell { width: 55px; padding: 6px; text-align: center; border: 1px solid #c
   </div>
   <table class="boletin-table">
     <thead>
-      <tr>
-        <th rowspan="2" style="width: 25%;">ASIGNATURAS</th>
-        <th colspan="2">P1</th><th colspan="2">P2</th><th colspan="2">P3</th><th colspan="2">P4</th>
-        <th rowspan="2">FINAL</th><th rowspan="2">EC</th><th rowspan="2">EE</th><th rowspan="2">SITUACIÓN</th>
-      </tr>
-      <tr><th>Nota</th><th>RP</th><th>Nota</th><th>RP</th><th>Nota</th><th>RP</th><th>Nota</th><th>RP</th></tr>
+      <tr><th style="width:25%;">ASIGNATURAS</th><th>PC1</th><th>PC2</th><th>PC3</th><th>PC4</th><th>FINAL</th><th>EC</th><th>EE</th><th>SITUACIÓN</th></tr>
     </thead>
     <tbody id="boletinBody"></tbody>
   </table>
@@ -292,6 +293,7 @@ input.cell { width: 55px; padding: 6px; text-align: center; border: 1px solid #c
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/appwrite@29.0.0"></script>
+<script src="./minerd-competencies.js"></script>
 <script>
 // ==========================================
 // ⚙️ CONFIGURACIÓN APPWRITE
@@ -322,16 +324,6 @@ const monthNames = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Ag
 // ==========================================
 // 🔧 FUNCIONES API REST (Sin queries problemáticos)
 // ==========================================
-// ===== MODO LOCAL: IndexedDB y cuentas locales (funciona sin Internet) =====
-const LOCAL_DB_NAME='HJVSYSTEM_LOCAL_V1'; let localMode=false; let localSession=null;
-function openLocalDB(){return new Promise((resolve,reject)=>{const req=indexedDB.open(LOCAL_DB_NAME,1);req.onupgradeneeded=()=>{const db=req.result;['profiles','grades','subjects','students','student_grades','attendance_records','local_users'].forEach(n=>{if(!db.objectStoreNames.contains(n))db.createObjectStore(n,{keyPath:'$id'});});};req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});}
-async function localAll(store){const db=await openLocalDB();return new Promise((res,rej)=>{const r=db.transaction(store,'readonly').objectStore(store).getAll();r.onsuccess=()=>res(r.result||[]);r.onerror=()=>rej(r.error);});}
-async function localPut(store,obj){const db=await openLocalDB();return new Promise((res,rej)=>{const tx=db.transaction(store,'readwrite');tx.objectStore(store).put(obj);tx.oncomplete=()=>res(obj);tx.onerror=()=>rej(tx.error);});}
-async function localDelete(store,id){const db=await openLocalDB();return new Promise((res,rej)=>{const tx=db.transaction(store,'readwrite');tx.objectStore(store).delete(id);tx.oncomplete=()=>res({});tx.onerror=()=>rej(tx.error);});}
-function localId(){return 'local_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8);}
-async function hashPassword(password,salt){const enc=new TextEncoder();const key=await crypto.subtle.importKey('raw',enc.encode(password),'PBKDF2',false,['deriveBits']);const bits=await crypto.subtle.deriveBits({name:'PBKDF2',salt:enc.encode(salt),iterations:120000,hash:'SHA-256'},key,256);return [...new Uint8Array(bits)].map(x=>x.toString(16).padStart(2,'0')).join('');}
-async function saveLocalAdmin(){if(!requireAdminAction())return;const name=document.getElementById('localAdminName').value.trim(),email=document.getElementById('localAdminEmail').value.trim().toLowerCase(),pass=document.getElementById('localAdminPass').value;if(!name||!email||pass.length<8)return alert('Completa nombre, correo y contraseña de al menos 8 caracteres.');const salt=localId(),hash=await hashPassword(pass,salt);const users=await localAll('local_users');const old=users.find(u=>u.role==='admin');await localPut('local_users',{$id:old?old.$id:localId(),name,email,role:'admin',salt,hash,is_blocked:false});document.getElementById('localAdminPass').value='';alert('✅ Administrador local guardado en esta computadora.');}
-async function localLogin(email,password){const users=await localAll('local_users'),u=users.find(x=>x.email===email.toLowerCase()&&x.role==='admin');if(!u)return null;const h=await hashPassword(password,u.salt);if(h!==u.hash||u.is_blocked)return null;localMode=true;localSession=u;setConnectionState('● Administrador local de emergencia','local');return {$id:u.$id,email:u.email,name:u.name};}
 const DEFAULT_SUBJECTS=['Lengua Española','Matemáticas','Ciencias Sociales (Historia, Geografía y Cívica)','Ciencias de la Naturaleza (Biología, Química y Física)','Inglés','Francés','Formación Integral Humana y Religiosa (FIHR)','Educación Artística','Educación Física'];
 const normalizeSubject=value=>String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
 async function ensureSubjectsForGrade(gradeId,allowCreate=isAdminUser()){if(!gradeId)return [];const result=await apiGet(`/databases/${DB_ID}/collections/${COL.subjects}/documents?limit=100`);let subjects=result.documents.filter(s=>s.grade_id===gradeId);if(allowCreate){for(const name of DEFAULT_SUBJECTS){if(!subjects.some(s=>normalizeSubject(s.name)===normalizeSubject(name))){try{subjects.push(await apiPost(`/databases/${DB_ID}/collections/${COL.subjects}/documents`,{documentId:'unique()',data:{grade_id:gradeId,name}}));}catch(err){console.warn('No se pudo crear la asignatura '+name,err.message);}}}}return subjects.sort((a,b)=>String(a.name).localeCompare(String(b.name),'es'));}
@@ -343,12 +335,6 @@ function canonicalGrade(value){const parts=gradeParts(value);return parts?GRADE_
 function sortGrades(a,b){const pa=gradeParts(a.name),pb=gradeParts(b.name);if(pa&&pb)return pa.num-pb.num||pa.section.localeCompare(pb.section);if(pa)return -1;if(pb)return 1;return String(a.name).localeCompare(String(b.name),'es');}
 async function ensureGrade(name){const result=await apiGet(`/databases/${DB_ID}/collections/${COL.grades}/documents?limit=100`);let grade=result.documents.find(g=>gradeKey(g.name)===gradeKey(name));if(!grade)grade=await apiPost(`/databases/${DB_ID}/collections/${COL.grades}/documents`,{documentId:'unique()',data:{name,teacher_id:'',year:2026}});try{await ensureSubjectsForGrade(grade.$id);}catch(err){console.warn('No se pudieron preparar las materias de '+name,err.message);}return grade;}
 async function ensureDefaultGrades(){try{const result=await apiGet(`/databases/${DB_ID}/collections/${COL.grades}/documents?limit=100`);for(const g of result.documents){const parts=gradeParts(g.name);if(parts){const target=`${GRADE_ORDINAL[parts.num]} ${parts.section||'A'}`;if(g.name!==target&&!result.documents.some(other=>other.$id!==g.$id&&gradeKey(other.name)===gradeKey(target))){try{await apiPut(`/databases/${DB_ID}/collections/${COL.grades}/documents/${g.$id}`,{data:{name:target}});g.name=target;}catch(err){console.warn('No se pudo renombrar el grado '+g.name,err.message);}}}}}catch(err){console.warn('No se pudo actualizar el catálogo de grados',err.message);}for(const name of DEFAULT_GRADES){try{await ensureGrade(name);}catch(err){console.warn('No se pudo preparar el grado '+name,err.message);}}}
-function collectionFromPath(path){const m=path.match(/\/collections\/([^/]+)\/documents/);if(!m)return null;return Object.entries(COL).find(([k,v])=>v===m[1])?.[0]||null;}
-async function localApi(method,path,data){if(path==='/account/sessions/current'&&method==='DELETE')return {};if(path==='/account/sessions/email'&&method==='POST'){const u=await localLogin(data.email,data.password);if(!u)throw Error('Credenciales locales incorrectas');return { $id:'local_session'};}if(path==='/account'&&method==='GET'){if(!localSession)throw Error('No hay sesión local');return {$id:localSession.$id,email:localSession.email,name:localSession.name};}
-const store=collectionFromPath(path);if(!store)throw Error('Operación local no reconocida: '+path);const base='/documents';const suffix=path.split(base)[1]||'';if(method==='GET'){if(suffix.startsWith('/')){const id=decodeURIComponent(suffix.slice(1).split('?')[0]);const all=await localAll(store);const obj=all.find(x=>x.$id===id);if(!obj)throw Error('Registro no encontrado');return obj;}const all=await localAll(store);return {documents:all,total:all.length};}
-if(method==='POST'){const obj={...(data.data||{}),$id:data.documentId==='unique()'?localId():data.documentId,$createdAt:new Date().toISOString(),$updatedAt:new Date().toISOString()};await localPut(store,obj);return obj;}
-if(method==='PUT'){const id=decodeURIComponent(suffix.split('?')[0].replace(/^\//,''));const old=(await localAll(store)).find(x=>x.$id===id)||{};const obj={...old,...(data.data||{}),$id:id,$updatedAt:new Date().toISOString()};await localPut(store,obj);return obj;}
-if(method==='DELETE'){const id=decodeURIComponent(suffix.split('?')[0].replace(/^\//,''));await localDelete(store,id);return {}; }throw Error('Método local no admitido');}
 function adaptTablesDBRequest(method,path,data){
   const match=path.match(/^\/databases\/([^/]+)\/collections\/([^/]+)\/documents(?:\/([^/?]+))?(?:\?([^#]*))?$/);
   if(!match)return {path,data,isTableList:false};
@@ -356,9 +342,15 @@ function adaptTablesDBRequest(method,path,data){
   const params=new URLSearchParams(queryString||'');
   const limit=params.get('limit');
   params.delete('limit');
+  const offset=params.get('offset');
+  params.delete('offset');
   if(limit!==null){
     const parsedLimit=Number(limit);
     if(Number.isInteger(parsedLimit)&&parsedLimit>0)params.append('queries[]',JSON.stringify({method:'limit',values:[parsedLimit]}));
+  }
+  if(offset!==null){
+    const parsedOffset=Number(offset);
+    if(Number.isInteger(parsedOffset)&&parsedOffset>=0)params.append('queries[]',JSON.stringify({method:'offset',values:[parsedOffset]}));
   }
   const query=params.toString();
   const rowPath=`/tablesdb/${encodeURIComponent(databaseId)}/tables/${encodeURIComponent(tableId)}/rows`;
@@ -370,8 +362,17 @@ function adaptTablesDBRequest(method,path,data){
   return {path:mappedPath,data:mappedData,isTableList:method==='GET'&&!rowId};
 }
 async function apiRequest(method, path, data = null) {
-  // Auth mediante el SDK: incluye persistencia alternativa en localStorage para incógnito.
-  if (!localMode && appwriteAccount) {
+  if(location.protocol==='file:'){
+    const message='Abre PLANI PREPARA desde una dirección http:// o https:// para comunicarte con Appwrite.';
+    setConnectionState('● Archivo local: Appwrite requiere localhost o HTTPS','error');
+    throw new Error(message);
+  }
+  if(!appwriteClient){
+    const message='No se pudo cargar el SDK de Appwrite. Revisa tu conexión a Internet y vuelve a cargar la página.';
+    setConnectionState('● No se pudo cargar Appwrite','error');
+    throw new Error(message);
+  }
+  if (appwriteAccount) {
     try {
       if (path === '/account' && method === 'GET') {
         const user = await appwriteAccount.get();
@@ -393,7 +394,8 @@ async function apiRequest(method, path, data = null) {
         return {};
       }
     } catch (e) {
-      if (e instanceof TypeError && !navigator.onLine) { localMode=true; return localApi(method,path,data); }
+      if(path==='/account'&&method==='GET'&&e.code===401)setConnectionState('● Appwrite disponible · inicia sesión','online');
+      else if(e instanceof TypeError)setConnectionState(navigator.onLine?'● No se pudo conectar con Appwrite':'● Sin conexión a Internet','error');
       throw e;
     }
   }
@@ -404,7 +406,6 @@ async function apiRequest(method, path, data = null) {
     credentials: 'include'
   };
   if (tablesRequest.data) options.body = JSON.stringify(tablesRequest.data);
-  if(localMode){setConnectionState('● Administrador local de emergencia','local');return localApi(method,path,data);}
   try {
     const response = await fetch(`${APPWRITE_ENDPOINT}${tablesRequest.path}`, options);
     if (!response.ok) { const error = await response.json().catch(() => ({ message: response.statusText }));if(response.status===401&&!path.startsWith('/databases/'))setConnectionState('● Appwrite accesible · inicia sesión','online');else setConnectionState(`● Appwrite respondió HTTP ${response.status}`,'error');throw new Error(error.message || response.statusText); }
@@ -412,25 +413,31 @@ async function apiRequest(method, path, data = null) {
     const result=await response.json();
     return tablesRequest.isTableList?{...result,documents:result.rows||[]}:result;
   } catch(err) {
-    if(!navigator.onLine) {
-      localMode=true;
-      setConnectionState('● Sin Internet · modo local','local');
-      return localApi(method,path,data);
-    }
     if(err instanceof TypeError) {
-      setConnectionState('● No se pudo conectar con Appwrite · revisa CORS','error');
+      setConnectionState(navigator.onLine?'● No se pudo conectar con Appwrite · revisa CORS':'● Sin conexión a Internet','error');
+      if(!navigator.onLine)throw new Error('No hay conexión a Internet. Los datos no se guardaron.');
       throw new Error(`No se pudo conectar con Appwrite. Si la consola indica un bloqueo CORS, agrega el origen ${location.origin} en Appwrite Console > Settings > Platforms como plataforma Web.`);
     }
     throw err;
   }
 }
 
-function setConnectionState(label,mode='unknown'){['connectionState','loginConnectionState'].forEach(id=>{const el=document.getElementById(id);if(!el)return;el.textContent=label;el.style.color=mode==='online'?'#155724':mode==='local'?'#856404':mode==='error'?'#b00020':'#1e3c72';});}
+function setConnectionState(label,mode='unknown'){['connectionState','loginConnectionState'].forEach(id=>{const el=document.getElementById(id);if(!el)return;el.textContent=label;el.style.color=mode==='online'?'#155724':mode==='error'?'#b00020':'#1e3c72';});}
 
 async function apiGet(path) { return apiRequest('GET', path); }
 async function apiPost(path, data) { return apiRequest('POST', path, data); }
 async function apiPut(path, data) { return apiRequest('PUT', path, data); }
 async function apiDelete(path) { return apiRequest('DELETE', path); }
+async function getAllStudentGradeRecords(){
+  const base=`/databases/${DB_ID}/collections/${COL.student_grades}/documents`;
+  const pageSize=100;let offset=0;const records=[];
+  while(true){
+    const page=await apiGet(`${base}?limit=${pageSize}&offset=${offset}`);
+    records.push(...page.documents);
+    if(page.documents.length<pageSize)return records;
+    offset+=page.documents.length;
+  }
+}
 
 // ==========================================
 // 🔐 AUTENTICACIÓN
@@ -459,8 +466,7 @@ async function handleLogin() {
     currentUser = await apiGet('/account');
     await loadProfile();
   } catch (error) {
-    try { const u=await localLogin(email,password); if(u){currentUser=u; await loadProfile(); return;} } catch(e){}
-    showMsg('❌ '+error.message+' | Si es la primera vez, configura el administrador local.');
+    showMsg('❌ '+error.message);
   }
 }
 
@@ -485,9 +491,6 @@ async function handleRegister() {
 
 async function loadProfile() {
   try {
-    if (localMode && localSession) {
-      currentProfile={ $id:localSession.$id, full_name:localSession.name, email:localSession.email, role:localSession.role, is_blocked:localSession.is_blocked };
-    } else {
     const profileQueries = new URLSearchParams();
     profileQueries.append('queries[]', JSON.stringify({method:'equal',attribute:'email',values:[currentUser.email]}));
     profileQueries.set('limit', '1');
@@ -496,7 +499,6 @@ async function loadProfile() {
     
     if (!profile) throw new Error('Esta cuenta no está registrada por un administrador.');
     currentProfile = profile;
-    }
     
     if (currentProfile.is_blocked) { alert("🔒 Cuenta bloqueada"); handleLogout(); return; }
     
@@ -536,8 +538,8 @@ function showSection(id, btn) {
   if (id === 'reports') generateReport();
 }
 
-window.addEventListener('online',()=>setConnectionState(localMode?'● Administrador local de emergencia':'● Internet disponible · base de datos sin verificar',localMode?'local':'unknown'));
-window.addEventListener('offline',()=>setConnectionState(localMode?'● Administrador local de emergencia':'● Sin Internet · base de datos sin verificar',localMode?'local':'unknown'));
+window.addEventListener('online',()=>setConnectionState('● Internet disponible · Appwrite por verificar','unknown'));
+window.addEventListener('offline',()=>setConnectionState('● Sin conexión a Internet','error'));
 // ==========================================
 // 🏫 GRADOS
 // ==========================================
@@ -892,12 +894,27 @@ function printSection(elementId, title) {
   const el = document.getElementById(elementId);
   if (!el || !el.innerHTML.trim()) return alert('No hay datos para imprimir');
   const clone=el.cloneNode(true);
-  const sourceControls=[...el.querySelectorAll('select, input:not([type="date"])')];
-  const clonedControls=[...clone.querySelectorAll('select, input:not([type="date"])')];
-  sourceControls.forEach((control,index)=>{const printed=document.createElement('span');printed.className='printed-value';printed.textContent=control.value||'';clonedControls[index]?.replaceWith(printed);});
+  const sourceControls=[...el.querySelectorAll('select, input:not([type="date"]), textarea')];
+  const clonedControls=[...clone.querySelectorAll('select, input:not([type="date"]), textarea')];
+  sourceControls.forEach((control,index)=>{const printed=document.createElement('span');printed.className='printed-value';const value=control.tagName==='SELECT'?control.selectedOptions[0]?.textContent:control.value;printed.textContent=value||'';clonedControls[index]?.replaceWith(printed);});
   clone.querySelectorAll('input[type="date"]').forEach(input=>input.remove());
   clone.querySelectorAll('[onclick]').forEach(node=>node.removeAttribute('onclick'));
   clone.querySelectorAll('th,td').forEach(cell=>{cell.style.minWidth='';cell.style.width='';cell.style.height='';cell.style.position='';cell.style.cursor='';});
+  if(elementId==='grades'){
+    clone.querySelector('#competencyInstructions')?.remove();
+    clone.querySelector('#competencySource')?.remove();
+    const table=clone.querySelector('#gradesGrid table');
+    if(table){
+      const periodColumns=table.querySelectorAll('thead tr:nth-child(2) th').length;
+      const widths=['45mm',...Array(periodColumns).fill('4.8mm'),'7.5mm','7.5mm','7.5mm','7.5mm','10mm','8mm','8mm','19mm'];
+      const columns=document.createElement('colgroup');
+      widths.forEach(width=>{const column=document.createElement('col');column.style.width=width;columns.appendChild(column);});
+      table.prepend(columns);
+    }
+    const printStyles=document.createElement('style');
+    printStyles.textContent='#grades #competencyDescriptions{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:8px 0}#grades #competencyDescriptions [data-competency-group]{display:flex;width:auto;min-width:0;flex-direction:column;align-items:stretch;gap:4px;margin:0;border:1px solid #333;padding:8px;break-inside:avoid;page-break-inside:avoid;font-size:8px;line-height:1.25}#grades #competencyDescriptions [data-competency-group] strong{font-size:9px}#grades #competencyDescriptions .printed-value{display:block;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.25}#grades #gradesGrid{overflow:visible!important}#grades #gradesGrid table{width:100%;table-layout:fixed;font-size:7px}#grades #gradesGrid th,#grades #gradesGrid td{padding:2px 1px;overflow:visible;white-space:normal;overflow-wrap:anywhere;line-height:1.1}#grades #gradesGrid thead th{font-size:6px}#grades #gradesGrid tbody td:first-child{text-align:left;font-size:8px;font-weight:bold;white-space:normal;overflow-wrap:anywhere}';
+    clone.prepend(printStyles);
+  }
   const context=elementId==='attendanceGrid'?[
     document.getElementById('asistGrade').selectedOptions[0]?.text,
     document.getElementById('asistMateria').selectedOptions[0]?.text,
@@ -905,10 +922,10 @@ function printSection(elementId, title) {
     document.getElementById('asistDocente').value
   ].filter(Boolean).join(' · '):'';
   const printHtml=`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>${escapeHtml(title)}</title>
-    <style>@page{size:A4 landscape;margin:6mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;padding:0;color:#111}.center-print-header{display:flex;align-items:center;justify-content:center;gap:16px;text-align:center;border-bottom:3px double #111;padding-bottom:7px;margin-bottom:6px}.center-print-logo{max-width:82px;max-height:65px;object-fit:contain}.center-print-info{font-size:9px;line-height:1.3}.center-app-name{font-size:10px;font-weight:bold;letter-spacing:1px}.center-name{font-size:16px;font-weight:bold}.print-document-title{text-align:center;font-size:14px;margin:4px 0}.print-detail{text-align:center;font-size:9px;margin-bottom:5px}table{width:100%;border-collapse:collapse;font-size:${elementId==='attendanceGrid'?'7':'10'}px;table-layout:${elementId==='attendanceGrid'?'fixed':'auto'}}th,td{border:1px solid #333;padding:${elementId==='attendanceGrid'?'2px':'4px'};text-align:center;overflow:hidden}th{background:#eee;print-color-adjust:exact;-webkit-print-color-adjust:exact}#attendanceGrid thead tr:first-child th:first-child,#attendanceGrid tbody td:first-child{width:8mm}#attendanceGrid thead tr:first-child th:nth-child(2),#attendanceGrid tbody td:nth-child(2){width:42mm}#attendanceGrid thead tr:nth-child(2) th{width:auto}#attendanceGrid td:nth-child(2){text-align:left;white-space:nowrap}.printed-mark{display:inline-block;min-width:9px;font-weight:bold}.attendance-legend{font-size:8px;margin-top:4px}thead{display:table-header-group}tr{break-inside:avoid;page-break-inside:avoid}@media print{button{display:none}}</style></head><body>
+    <style>@page{size:A4 landscape;margin:6mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;padding:0;color:#111}.center-print-header{display:flex;align-items:center;justify-content:center;gap:16px;text-align:center;border-bottom:3px double #111;padding-bottom:7px;margin-bottom:6px}.center-print-logo{max-width:82px;max-height:65px;object-fit:contain}.center-print-info{font-size:9px;line-height:1.3}.center-app-name{font-size:10px;font-weight:bold;letter-spacing:1px}.center-name{font-size:16px;font-weight:bold}.print-document-title{text-align:center;font-size:14px;margin:4px 0}.print-detail{text-align:center;font-size:9px;margin-bottom:5px}table{width:100%;border-collapse:collapse;font-size:${elementId==='attendanceGrid'?'7':elementId==='grades'?'5':'10'}px;table-layout:${elementId==='attendanceGrid'||elementId==='grades'?'fixed':'auto'}}th,td{border:1px solid #333;padding:${elementId==='attendanceGrid'||elementId==='grades'?'2px':'4px'};text-align:center;overflow:hidden}th{background:#eee;print-color-adjust:exact;-webkit-print-color-adjust:exact}#attendanceGrid thead tr:first-child th:first-child,#attendanceGrid tbody td:first-child{width:8mm}#attendanceGrid thead tr:first-child th:nth-child(2),#attendanceGrid tbody td:nth-child(2){width:42mm}#attendanceGrid thead tr:nth-child(2) th{width:auto}#attendanceGrid td:nth-child(2){text-align:left;white-space:nowrap}#grades textarea{display:none}.printed-value{white-space:pre-wrap}.printed-mark{display:inline-block;min-width:9px;font-weight:bold}.attendance-legend{font-size:8px;margin-top:4px}thead{display:table-header-group}tr{break-inside:avoid;page-break-inside:avoid}@media print{button{display:none}}</style></head><body>
     ${buildCenterHeaderMarkup(title,context)}<div id="${escapeHtml(elementId)}">${clone.innerHTML}</div>
     </body></html>`;
-  const frame=document.createElement('iframe');frame.setAttribute('aria-hidden','true');frame.style.position='fixed';frame.style.left='-10000px';frame.style.bottom='0';frame.style.width='1px';frame.style.height='1px';frame.style.border='0';
+  const frame=document.createElement('iframe');frame.setAttribute('aria-hidden','true');frame.style.position='fixed';frame.style.left='-10000px';frame.style.bottom='0';frame.style.width='297mm';frame.style.height='210mm';frame.style.border='0';
   frame.onload=()=>{const printWindow=frame.contentWindow;const cleanup=()=>{frame.removeEventListener('load',frame.onload);frame.remove();};printWindow.addEventListener('afterprint',cleanup,{once:true});setTimeout(()=>{printWindow.focus();printWindow.print();},250);};
   frame.srcdoc=printHtml;document.body.appendChild(frame);
 }
@@ -957,87 +974,257 @@ async function loadAttendanceSubjects() {
   }
 }
 
-async function loadGradesTable() {
-  const gradeId = document.getElementById('gradeGrade').value;
-  const subjectId = document.getElementById('gradeSubject').value;
-  if (!gradeId || !subjectId) return alert("Selecciona grado y asignatura");
-  if (String(subjectId).startsWith('__tmp_')) return alert("Las asignaturas no están en la base de datos. Revisa permisos de la colección subjects.");
-
-  try {
-    const studentsRes = await apiGet(`/databases/${DB_ID}/collections/${COL.students}/documents?limit=100`);
-    const students = studentsRes.documents.filter(s => s.grade_id === gradeId).sort((a,b) => a.order_number - b.order_number);
-    if (students.length === 0) {
-      document.getElementById('gradesGrid').innerHTML = '<p>No hay estudiantes en este grado.</p>';
-      return;
-    }
-
-    const gradesRes = await apiGet(`/databases/${DB_ID}/collections/${COL.student_grades}/documents?limit=100`);
-
-    let html = '<table><thead><tr><th rowspan="2" style="min-width:180px;">Estudiante</th>';
-    html += '<th colspan="2">P1</th><th colspan="2">P2</th><th colspan="2">P3</th><th colspan="2">P4</th>';
-    html += '<th rowspan="2">Final</th><th rowspan="2">EC</th><th rowspan="2">EE</th><th rowspan="2">Situación</th></tr><tr>';
-    for (let i = 1; i <= 4; i++) html += '<th>Nota</th><th>RP</th>';
-    html += '</tr></thead><tbody>';
-
-    students.forEach(s => {
-      const rec = gradesRes.documents.find(r => r.student_id === s.$id && r.subject_id === subjectId) || {};
-      const final = rec.final_score || 0;
-      const cls = final >= 70 ? 'status-promovido' : (final > 0 ? 'status-aplazado' : '');
-      html += `<tr data-student="${s.$id}"><td style="text-align:left;">${s.last_name}, ${s.first_name}</td>`;
-      for (let i = 1; i <= 4; i++) {
-        html += `<td><input class="cell" type="number" min="0" max="100" data-field="p${i}" value="${rec['p'+i]??''}"></td>`;
-        html += `<td><input class="cell" type="number" min="0" max="100" data-field="rp${i}" value="${rec['rp'+i]??''}"></td>`;
-      }
-      html += `<td style="font-weight:bold;">${final||''}</td>
-        <td><input class="cell" type="number" min="0" max="100" data-field="ec" value="${rec.ec??''}"></td>
-        <td><input class="cell" type="number" min="0" max="100" data-field="ee" value="${rec.ee??''}"></td>
-        <td class="${cls}">${rec.status || '-'}</td></tr>`;
+const COMPETENCY_RECORD_STATUS=/^PC[1-4]$/;
+const COMPETENCY_DESCRIPTION_PREFIX='plani_prepara_competencies_v1';
+const COMPETENCY_SELECTION_PREFIX='plani_prepara_competency_selections_v1';
+function formatGradeValue(value){return value===null||value===undefined||!Number.isFinite(Number(value))?'':String(Number(Number(value).toFixed(1)));}
+function calculateCompetencyAverage(record){
+  const periodScores=[];
+  for(let period=1;period<=4;period++){
+    const recovery=record['rp'+period],grade=record['p'+period];
+    const value=recovery!==null&&recovery!==undefined&&recovery!==''?Number(recovery):grade!==null&&grade!==undefined&&grade!==''?Number(grade):null;
+    if(value===null||!Number.isFinite(value))return null;
+    periodScores.push(value);
+  }
+  return Number((periodScores.reduce((sum,value)=>sum+value,0)/4).toFixed(1));
+}
+function getGradeSummary(records){
+  const competencyRecords=records.filter(record=>COMPETENCY_RECORD_STATUS.test(String(record.status||'')));
+  if(competencyRecords.length){
+    const byCompetency=Array.from({length:4},(_,index)=>competencyRecords.find(record=>record.status==='PC'+(index+1))||null);
+    const competencyAverages=byCompetency.map(record=>record?calculateCompetencyAverage(record):null);
+    const complete=competencyAverages.every(value=>value!==null);
+    const finalScore=complete?Math.round(competencyAverages.reduce((sum,value)=>sum+value,0)/4):null;
+    const status=finalScore===null?'EN PROCESO':finalScore>=70?'PROMOVIDO':finalScore>=60?'CON PENDIENTE':'APLAZADO';
+    const legacy=records.find(record=>!COMPETENCY_RECORD_STATUS.test(String(record.status||'')))||null;
+    return {competencyRecords:byCompetency,competencyAverages,finalScore,status,ec:byCompetency[0]?.ec??legacy?.ec??null,ee:byCompetency[0]?.ee??legacy?.ee??null,legacy,hasCompetencyRecords:true};
+  }
+  const legacy=records.find(record=>record)||null;
+  const finalScore=legacy&&legacy.final_score!==null&&legacy.final_score!==undefined?Number(legacy.final_score):null;
+  return {competencyRecords:[null,null,null,null],competencyAverages:[null,null,null,null],finalScore,status:legacy?.status||'-',ec:legacy?.ec??null,ee:legacy?.ee??null,legacy,hasCompetencyRecords:false};
+}
+function competencyDescriptionStorageKey(){
+  const gradeId=document.getElementById('gradeGrade').value,subjectId=document.getElementById('gradeSubject').value;
+  return `${COMPETENCY_DESCRIPTION_PREFIX}:${gradeId}:${subjectId}`;
+}
+function competencySelectionStorageKey(){
+  const gradeId=document.getElementById('gradeGrade').value,subjectId=document.getElementById('gradeSubject').value;
+  return `${COMPETENCY_SELECTION_PREFIX}:${gradeId}:${subjectId}`;
+}
+function getCompetencyCatalogContext(){
+  const gradeSelect=document.getElementById('gradeGrade'),subjectSelect=document.getElementById('gradeSubject');
+  const gradeName=gradeSelect.options[gradeSelect.selectedIndex]?.textContent||'';
+  const gradeNum=gradeParts(gradeName)?.num||null;
+  const subjectName=subjectSelect.options[subjectSelect.selectedIndex]?.textContent||'';
+  const subject=normalizeSubject(subjectName);
+  let subjectKey='';
+  if(subject.includes('lengua espanola'))subjectKey='lengua-espanola';
+  else if(subject.includes('ingles'))subjectKey='ingles';
+  else if(subject.includes('frances'))subjectKey='frances';
+  else if(subject.includes('matematic'))subjectKey='matematicas';
+  else if(subject.includes('ciencias sociales'))subjectKey='ciencias-sociales';
+  else if(subject.includes('ciencias de la naturaleza')||subject.includes('ciencias naturales'))subjectKey='ciencias-naturaleza';
+  else if(subject.includes('educacion artistica'))subjectKey='educacion-artistica';
+  else if(subject.includes('educacion fisica'))subjectKey='educacion-fisica';
+  else if(subject.includes('formacion')||subject.includes('fihr'))subjectKey='fihr';
+  const catalog=typeof MINERD_COMPETENCIES==='undefined'?{}:MINERD_COMPETENCIES;
+  const competencies=gradeNum&&subjectKey?catalog[String(gradeNum)]?.[subjectKey]||[]:[];
+  return {gradeNum,gradeName,subjectName,subjectKey,competencies};
+}
+function renderCompetencyDescriptions(){
+  const gradeId=document.getElementById('gradeGrade').value,subjectId=document.getElementById('gradeSubject').value;
+  const container=document.getElementById('competencyDescriptions');
+  const source=document.getElementById('competencySource');
+  if(!gradeId||!subjectId){container.innerHTML='';source.textContent='';return;}
+  const context=getCompetencyCatalogContext();
+  let descriptions=['','','',''],selections=['','','',''];
+  try{
+    const savedDescriptions=JSON.parse(localStorage.getItem(competencyDescriptionStorageKey())||'[]');
+    const savedSelections=JSON.parse(localStorage.getItem(competencySelectionStorageKey())||'[]');
+    if(Array.isArray(savedDescriptions))descriptions=descriptions.map((_,index)=>String(savedDescriptions[index]||''));
+    if(Array.isArray(savedSelections))selections=selections.map((_,index)=>String(savedSelections[index]??''));
+  }catch(error){console.error(error);alert('No se pudieron leer las competencias guardadas en este navegador.');}
+  const sources=typeof MINERD_COMPETENCY_SOURCES==='undefined'?{}:MINERD_COMPETENCY_SOURCES;
+  const sourceUrl=context.gradeNum?sources[String(context.gradeNum)]:'';
+  source.innerHTML=context.competencies.length
+    ?`Competencias del Registro MINERD para ${escapeHtml(context.gradeName)} · ${escapeHtml(context.subjectName)}. ${sourceUrl?`<a href="${escapeHtml(sourceUrl)}" target="_blank" rel="noopener noreferrer">Abrir registro</a>.`:''}`
+    :'No hay competencias oficiales cargadas para esta materia y grado. Selecciona “Personalizada” para conservar o escribir una descripción propia.';
+  container.innerHTML=Array.from({length:4},(_,index)=>{
+    const savedSelection=selections[index];
+    const validOfficialSelection=/^\d+$/.test(savedSelection)&&Number(savedSelection)<context.competencies.length;
+    let selection='';
+    if(savedSelection==='custom')selection='custom';
+    else if(validOfficialSelection)selection=savedSelection;
+    else if(descriptions[index]||!context.competencies.length)selection='custom';
+    const description=selection==='custom'?descriptions[index]:selection!==''?context.competencies[Number(selection)].description:'';
+    const options=context.competencies.map((competency,competencyIndex)=>`<option value="${competencyIndex}" ${selection===String(competencyIndex)?'selected':''}>${competencyIndex+1}. ${escapeHtml(competency.code)}</option>`).join('');
+    return `<label data-competency-group="${index+1}"><strong>Competencia ${index+1}</strong>
+      <select data-competency-selection="${index+1}" onchange="handleCompetencySelectionChange(this)">
+        <option value="" ${selection===''?'selected':''}>-- Seleccionar competencia oficial --</option>${options}
+        <option value="custom" ${selection==='custom'?'selected':''}>Personalizada</option>
+      </select>
+      <textarea data-competency-description="${index+1}" aria-label="Descripción de la competencia ${index+1}" ${selection==='custom'?'':'readonly'} oninput="saveCompetencyDescriptions()" onchange="saveCompetencyDescriptions()">${escapeHtml(description)}</textarea>
+    </label>`;
+  }).join('');
+  updateCompetencyColumnHeaders();
+}
+function handleCompetencySelectionChange(select){
+  const index=Number(select.dataset.competencySelection)-1,label=select.closest('[data-competency-group]'),descriptionField=label?.querySelector('[data-competency-description]');
+  if(!descriptionField)return;
+  if(select.value==='custom'){
+    try{
+      const saved=JSON.parse(localStorage.getItem(competencyDescriptionStorageKey())||'[]');
+      descriptionField.value=Array.isArray(saved)?String(saved[index]||''):'';
+    }catch(error){console.error(error);alert('No se pudo leer la descripción personalizada guardada: '+error.message);descriptionField.value='';}
+    descriptionField.readOnly=false;
+  }else{
+    const context=getCompetencyCatalogContext(),competency=context.competencies[Number(select.value)];
+    descriptionField.value=select.value===''?'':competency?.description||'';
+    descriptionField.readOnly=true;
+  }
+  saveCompetencySelections();
+  updateCompetencyColumnHeaders();
+}
+function saveCompetencySelections(){
+  try{
+    const selections=[...document.querySelectorAll('#competencyDescriptions [data-competency-selection]')].map(select=>select.value);
+    localStorage.setItem(competencySelectionStorageKey(),JSON.stringify(selections));
+  }catch(error){console.error(error);alert('No se pudieron guardar las competencias seleccionadas en este navegador: '+error.message);}
+}
+function saveCompetencyDescriptions(){
+  try{
+    const stored=JSON.parse(localStorage.getItem(competencyDescriptionStorageKey())||'[]');
+    const descriptions=Array.isArray(stored)?stored:['','','',''];
+    document.querySelectorAll('#competencyDescriptions [data-competency-group]').forEach((label,index)=>{
+      if(label.querySelector('[data-competency-selection]')?.value==='custom')descriptions[index]=label.querySelector('[data-competency-description]')?.value.trim()||'';
     });
-    html += '</tbody></table>';
-    document.getElementById('gradesGrid').innerHTML = html;
-  } catch (e) {
-    console.error(e);
-    alert('❌ Error cargando tabla: ' + e.message);
+    localStorage.setItem(competencyDescriptionStorageKey(),JSON.stringify(descriptions));
+  }catch(error){console.error(error);alert('No se pudieron guardar las descripciones de competencias en este navegador: '+error.message);}
+}
+function updateCompetencyColumnHeaders(){
+  const context=getCompetencyCatalogContext();
+  document.querySelectorAll('#gradesGrid [data-competency-heading]').forEach(header=>{
+    const index=Number(header.dataset.competencyHeading)-1,select=document.querySelector(`#competencyDescriptions [data-competency-selection="${index+1}"]`);
+    const item=select&&/^\d+$/.test(select.value)?context.competencies[Number(select.value)]:null;
+    let label='Sin asignar';
+    if(item)label=item.code;
+    else if(select?.value==='custom')label='Personalizada';
+    header.innerHTML=`Competencia ${index+1}<br><small>${escapeHtml(label)}</small>`;
+  });
+}
+function updateGradeRow(row){
+  const averages=[];
+  for(let competency=1;competency<=4;competency++){
+    const scores={};
+    for(let period=1;period<=4;period++){
+      scores['p'+period]=row.querySelector(`[data-field="c${competency}p${period}"]`)?.value||null;
+      scores['rp'+period]=row.querySelector(`[data-field="c${competency}rp${period}"]`)?.value||null;
+    }
+    const average=calculateCompetencyAverage(scores);
+    averages.push(average);
+    const cell=row.querySelector(`[data-pc="${competency}"]`);
+    if(cell)cell.textContent=formatGradeValue(average);
+  }
+  const complete=averages.every(value=>value!==null);
+  const finalScore=complete?Math.round(averages.reduce((sum,value)=>sum+value,0)/4):null;
+  const finalCell=row.querySelector('[data-final-score]');
+  const statusCell=row.querySelector('[data-grade-status]');
+  if(finalCell)finalCell.textContent=formatGradeValue(finalScore);
+  if(statusCell){
+    const status=finalScore===null?'EN PROCESO':finalScore>=70?'PROMOVIDO':finalScore>=60?'CON PENDIENTE':'APLAZADO';
+    statusCell.textContent=status;
+    statusCell.className=finalScore===null?'':finalScore>=70?'status-promovido':finalScore>0?'status-aplazado':'';
   }
 }
+function readGradeInput(row,fieldName,studentName){
+  const field=row.querySelector(`[data-field="${fieldName}"]`);
+  if(!field||field.value.trim()==='')return null;
+  const value=Number(field.value);
+  if(!Number.isFinite(value)||value<0||value>100)throw Error(`La nota de ${studentName} debe estar entre 0 y 100.`);
+  return value;
+}
 
-async function saveGrades() {
-  const rows = document.querySelectorAll('#gradesGrid tbody tr');
-  const subjectId = document.getElementById('gradeSubject').value;
-  
-  const existingRes = await apiGet(`/databases/${DB_ID}/collections/${COL.student_grades}/documents?limit=100`);
-  
-  for (const row of rows) {
-    const studentId = row.getAttribute('data-student');
-    const getVal = (f) => { const v = row.querySelector(`[data-field="${f}"]`); return v && v.value !== '' ? parseFloat(v.value) : null; };
-    const p1=getVal('p1'), rp1=getVal('rp1'), p2=getVal('p2'), rp2=getVal('rp2');
-    const p3=getVal('p3'), rp3=getVal('rp3'), p4=getVal('p4'), rp4=getVal('rp4');
-    const ec=getVal('ec'), ee=getVal('ee');
-    
-    const f1 = rp1 !== null ? rp1 : (p1 !== null ? p1 : 0);
-    const f2 = rp2 !== null ? rp2 : (p2 !== null ? p2 : 0);
-    const f3 = rp3 !== null ? rp3 : (p3 !== null ? p3 : 0);
-    const f4 = rp4 !== null ? rp4 : (p4 !== null ? p4 : 0);
-    
-    let finalScore = (f1 + f2 + f3 + f4) / 4;
-    let displayFinal = finalScore;
-    if (ec !== null) displayFinal = ec;
-    if (ee !== null) displayFinal = ee;
-    
-    let status = 'APLAZADO';
-    if (displayFinal >= 70) status = 'PROMOVIDO';
-    else if (ec !== null && ec >= 70) status = 'PROMOVIDO (EC)';
-    else if (ee !== null && ee >= 70) status = 'PROMOVIDO (EE)';
-    else if (finalScore >= 60) status = 'CON PENDIENTE';
-    
-    const data = { student_id: studentId, subject_id: subjectId, p1, rp1, p2, rp2, p3, rp3, p4, rp4, ec, ee, final_score: displayFinal, status };
-    const match = existingRes.documents.find(d => d.student_id === studentId && d.subject_id === subjectId);
-    
-    if (match) await apiPut(`/databases/${DB_ID}/collections/${COL.student_grades}/documents/${match.$id}`, { data });
-    else await apiPost(`/databases/${DB_ID}/collections/${COL.student_grades}/documents`, { documentId: 'unique()', data });
-  }
-  alert('✅ Notas guardadas');
-  await loadGradesTable();
+async function loadGradesTable() {
+  const gradeId=document.getElementById('gradeGrade').value,subjectId=document.getElementById('gradeSubject').value;
+  if(!gradeId||!subjectId)return alert('Selecciona grado y asignatura');
+  if(String(subjectId).startsWith('__tmp_'))return alert('Las asignaturas no están en la base de datos. Revisa permisos de la colección subjects.');
+  renderCompetencyDescriptions();
+  document.getElementById('gradeLegacyNotice').innerHTML='';
+  try{
+    const studentsRes=await apiGet(`/databases/${DB_ID}/collections/${COL.students}/documents?limit=100`);
+    const students=studentsRes.documents.filter(student=>student.grade_id===gradeId).sort((a,b)=>a.order_number-b.order_number);
+    if(students.length===0){document.getElementById('gradesGrid').innerHTML='<p>No hay estudiantes en este grado.</p>';return;}
+    const gradeRecords=await getAllStudentGradeRecords();
+    let hasLegacyRecords=false;
+    let html='<table><thead><tr><th rowspan="2" style="min-width:180px;">Estudiante</th>';
+    for(let competency=1;competency<=4;competency++)html+=`<th colspan="8" data-competency-heading="${competency}">Competencia ${competency}</th>`;
+    for(let competency=1;competency<=4;competency++)html+=`<th rowspan="2">PC${competency}</th>`;
+    html+='<th rowspan="2">Calificación final</th><th rowspan="2">Eval. completiva</th><th rowspan="2">Eval. extraordinaria</th><th rowspan="2">Situación</th></tr><tr>';
+    for(let competency=1;competency<=4;competency++)for(let period=1;period<=4;period++)html+=`<th>P${period}</th><th>RP${period}</th>`;
+    html+='</tr></thead><tbody>';
+    students.forEach(student=>{
+      const records=gradeRecords.filter(record=>record.student_id===student.$id&&record.subject_id===subjectId);
+      const summary=getGradeSummary(records);
+      if(summary.legacy)hasLegacyRecords=true;
+      html+=`<tr data-student="${escapeHtml(student.$id)}"><td style="text-align:left;">${escapeHtml(`${student.last_name||''}, ${student.first_name||''}`)}</td>`;
+      for(let competency=1;competency<=4;competency++){
+        const record=summary.competencyRecords[competency-1]||{};
+        for(let period=1;period<=4;period++){
+          for(const prefix of ['p','rp']){
+            const fieldName=`${prefix}${period}`,value=record[fieldName]??'';
+            html+=`<td><input class="cell" type="number" min="0" max="100" step="0.1" data-field="c${competency}${fieldName}" value="${escapeHtml(value)}" oninput="updateGradeRow(this.closest('tr'))"></td>`;
+          }
+        }
+      }
+      for(let competency=1;competency<=4;competency++)html+=`<td data-pc="${competency}" style="font-weight:bold;">${formatGradeValue(summary.competencyAverages[competency-1])}</td>`;
+      const finalClass=summary.finalScore===null?'':summary.finalScore>=70?'status-promovido':summary.finalScore>0?'status-aplazado':'';
+      const legacyHint=summary.legacy?`<br><small>Formato anterior conservado · final ${escapeHtml(formatGradeValue(summary.legacy.final_score)||'—')}</small>`:'';
+      html+=`<td data-final-score style="font-weight:bold;">${formatGradeValue(summary.finalScore)}</td>
+        <td><input class="cell" type="number" min="0" max="100" step="0.1" data-field="ec" value="${escapeHtml(summary.ec??'')}"></td>
+        <td><input class="cell" type="number" min="0" max="100" step="0.1" data-field="ee" value="${escapeHtml(summary.ee??'')}"></td>
+        <td data-grade-status class="${finalClass}">${escapeHtml(summary.status)}${legacyHint}</td></tr>`;
+    });
+    html+='</tbody></table>';
+    document.getElementById('gradesGrid').innerHTML=html;
+    updateCompetencyColumnHeaders();
+    if(hasLegacyRecords)document.getElementById('gradeLegacyNotice').innerHTML='<p class="msg" style="background:#fff3cd;color:#664d03;">Hay notas guardadas con el formato anterior, que no las separaba por competencia. Se conservan; revisa esos registros y coloca cada nota en su competencia correspondiente.</p>';
+  }catch(error){console.error(error);alert('❌ Error cargando tabla: '+error.message);}
+}
+
+async function saveGrades(){
+  const rows=document.querySelectorAll('#gradesGrid tbody tr'),subjectId=document.getElementById('gradeSubject').value;
+  if(!subjectId)return alert('Selecciona una asignatura antes de guardar.');
+  try{
+    const existingRecords=await getAllStudentGradeRecords(),pendingWrites=[];
+    for(const row of rows){
+      const studentId=row.getAttribute('data-student'),studentName=row.querySelector('td')?.textContent.trim()||'estudiante';
+      const records=existingRecords.filter(record=>record.student_id===studentId&&record.subject_id===subjectId);
+      for(let competency=1;competency<=4;competency++){
+        const data={student_id:studentId,subject_id:subjectId,status:'PC'+competency};
+        let hasScores=false;
+        for(let period=1;period<=4;period++)for(const prefix of ['p','rp']){
+          const fieldName=`c${competency}${prefix}${period}`,value=readGradeInput(row,fieldName,studentName);
+          data[prefix+period]=value;
+          if(value!==null)hasScores=true;
+        }
+        if(competency===1){
+          data.ec=readGradeInput(row,'ec',studentName);
+          data.ee=readGradeInput(row,'ee',studentName);
+          if(data.ec!==null||data.ee!==null)hasScores=true;
+        }
+        const existing=records.find(record=>record.status===data.status);
+        if(!hasScores&&!existing)continue;
+        data.final_score=calculateCompetencyAverage(data);
+        pendingWrites.push({existing,data});
+      }
+    }
+    for(const {existing,data} of pendingWrites){
+      if(existing)await apiPut(`/databases/${DB_ID}/collections/${COL.student_grades}/documents/${existing.$id}`,{data});
+      else await apiPost(`/databases/${DB_ID}/collections/${COL.student_grades}/documents`,{documentId:'unique()',data});
+    }
+    alert('✅ Calificaciones por competencia guardadas.');
+    await loadGradesTable();
+  }catch(error){console.error(error);alert('❌ No se pudieron guardar las calificaciones: '+error.message);}
 }
 
 // ==========================================
@@ -1062,8 +1249,7 @@ async function generateBoletin() {
     const student = await apiGet(`/databases/${DB_ID}/collections/${COL.students}/documents/${studentId}`);
     const grade = await apiGet(`/databases/${DB_ID}/collections/${COL.grades}/documents/${gradeId}`);
     const subjects = await ensureSubjectsForGrade(gradeId);
-    const gradesRes = await apiGet(`/databases/${DB_ID}/collections/${COL.student_grades}/documents?limit=100`);
-    const records = gradesRes.documents.filter(r => r.student_id === studentId);
+    const records=(await getAllStudentGradeRecords()).filter(record=>record.student_id===studentId);
 
     document.querySelector('.boletin-header').innerHTML=buildCenterHeaderMarkup('BOLETÍN DE CALIFICACIONES','AÑO ESCOLAR 2025 - 2026');
 
@@ -1077,21 +1263,20 @@ async function generateBoletin() {
     let total = 0, count = 0;
 
     if (subjects.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="13">No hay asignaturas para este grado. Carga calificaciones primero.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="9">No hay asignaturas para este grado. Carga calificaciones primero.</td></tr>';
     }
 
     subjects.forEach(subj => {
-      const rec = records.find(r => r.subject_id === subj.$id) || {};
-      const fs = rec.final_score != null ? Number(rec.final_score) : 0;
-      if (rec.final_score != null) { total += fs; count++; }
-      const getV = (v) => (v !== null && v !== undefined && v !== '') ? v : '-';
+      const summary=getGradeSummary(records.filter(record=>record.subject_id===subj.$id));
+      const fs=summary.finalScore;
+      if(fs!==null){total+=fs;count++;}
+      const getV=value=>value!==null&&value!==undefined&&value!==''?value:'-';
       const cls = fs >= 70 ? 'status-promovido' : (fs > 0 ? 'status-aplazado' : '');
       tbody.innerHTML += `<tr>
-        <td style="text-align:left; font-weight:bold;">${subj.name}</td>
-        <td>${getV(rec.p1)}</td><td>${getV(rec.rp1)}</td><td>${getV(rec.p2)}</td><td>${getV(rec.rp2)}</td>
-        <td>${getV(rec.p3)}</td><td>${getV(rec.rp3)}</td><td>${getV(rec.p4)}</td><td>${getV(rec.rp4)}</td>
-        <td style="font-weight:bold;">${getV(rec.final_score)}</td><td>${getV(rec.ec)}</td><td>${getV(rec.ee)}</td>
-        <td class="${cls}">${rec.status || '-'}</td></tr>`;
+        <td style="text-align:left; font-weight:bold;">${escapeHtml(subj.name)}</td>
+        ${summary.competencyAverages.map(value=>`<td>${getV(value)}</td>`).join('')}
+        <td style="font-weight:bold;">${getV(fs)}</td><td>${getV(summary.ec)}</td><td>${getV(summary.ee)}</td>
+        <td class="${cls}">${escapeHtml(summary.status)}</td></tr>`;
     });
 
     const avg = count > 0 ? (total / count).toFixed(1) : 0;
@@ -1123,15 +1308,17 @@ async function generateReport() {
   const studentsRes = await apiGet(`/databases/${DB_ID}/collections/${COL.students}/documents?limit=100`);
   const students = studentsRes.documents.filter(s => s.grade_id === gradeId);
   
-  const gradesRes = await apiGet(`/databases/${DB_ID}/collections/${COL.student_grades}/documents?limit=100`);
-  
+  const gradeRecords=await getAllStudentGradeRecords();
   let prom = 0, apl = 0, pend = 0;
   for (const s of students) {
-    const recs = gradesRes.documents.filter(r => r.student_id === s.$id);
-    for (const r of recs) {
-      if (r.status && r.status.includes('PROMOVIDO')) prom++;
-      else if (r.status === 'APLAZADO') apl++;
-      else if (r.status && r.status.includes('PENDIENTE')) pend++;
+    const studentRecords=gradeRecords.filter(record=>record.student_id===s.$id);
+    const subjectIds=[...new Set(studentRecords.map(record=>record.subject_id))];
+    for(const subjectId of subjectIds){
+      const summary=getGradeSummary(studentRecords.filter(record=>record.subject_id===subjectId));
+      if(summary.finalScore===null)continue;
+      if(summary.status&&summary.status.includes('PROMOVIDO'))prom++;
+      else if(summary.status==='APLAZADO')apl++;
+      else if(summary.status&&summary.status.includes('PENDIENTE'))pend++;
     }
   }
   
@@ -1157,14 +1344,12 @@ function removeCenterLogo(){if(!requireAdminAction())return;const c=getCenterCon
 let announcementChannel=null,activeAnnouncementId='',announcementTimer=null;
 function showAnnouncement(announcement){if(!announcement||!announcement.message)return;const elapsed=Date.now()-Number(announcement.createdAt||0),remaining=60000-elapsed;if(remaining<=0||announcement.id===activeAnnouncementId)return;activeAnnouncementId=announcement.id;document.getElementById('announcementText').textContent=announcement.message;document.getElementById('announcementMeta').textContent=`Aviso de ${announcement.sender||'Administración'} · desaparece en un minuto`;const overlay=document.getElementById('announcementOverlay');overlay.style.display='flex';clearTimeout(announcementTimer);announcementTimer=setTimeout(()=>{overlay.style.display='none';activeAnnouncementId='';},remaining);}
 function initAnnouncements(){try{announcementChannel=new BroadcastChannel('plani_prepara_announcements');announcementChannel.onmessage=e=>showAnnouncement(e.data);}catch(e){console.warn('BroadcastChannel no está disponible.');}window.addEventListener('storage',e=>{if(e.key==='plani_prepara_announcement'&&e.newValue){try{showAnnouncement(JSON.parse(e.newValue));}catch(err){}}});window.addEventListener('focus',()=>{try{const current=JSON.parse(localStorage.getItem('plani_prepara_announcement')||'null');if(current)showAnnouncement(current);}catch(e){}});try{const current=JSON.parse(localStorage.getItem('plani_prepara_announcement')||'null');if(current)showAnnouncement(current);}catch(e){}}
-function sendAnnouncement(){if(!currentProfile||currentProfile.role!=='admin')return alert('Solo un administrador puede enviar avisos.');const message=document.getElementById('announcementInput').value.trim();if(!message)return alert('Escribe el aviso antes de enviarlo.');const announcement={id:localId(),message,sender:currentProfile.full_name||currentProfile.email,createdAt:Date.now()};try{localStorage.setItem('plani_prepara_announcement',JSON.stringify(announcement));}catch(e){}if(announcementChannel)announcementChannel.postMessage(announcement);showAnnouncement(announcement);document.getElementById('announcementInput').value='';alert('✅ Aviso enviado. Se mostrará durante un minuto en las ventanas de PLANI PREPARA abiertas en este equipo.');}
+function sendAnnouncement(){if(!currentProfile||currentProfile.role!=='admin')return alert('Solo un administrador puede enviar avisos.');const message=document.getElementById('announcementInput').value.trim();if(!message)return alert('Escribe el aviso antes de enviarlo.');const announcement={id:Appwrite.ID.unique(),message,sender:currentProfile.full_name||currentProfile.email,createdAt:Date.now()};try{localStorage.setItem('plani_prepara_announcement',JSON.stringify(announcement));}catch(e){}if(announcementChannel)announcementChannel.postMessage(announcement);showAnnouncement(announcement);document.getElementById('announcementInput').value='';alert('✅ Aviso enviado. Se mostrará durante un minuto en las ventanas de PLANI PREPARA abiertas en este equipo.');}
 
 async function loadAdminPanel() {
   if (!requireAdminAction()) return;
-  const cloudControls=['newUserName','newUserEmail','newUserPassword','newUserRole'];cloudControls.forEach(id=>{const el=document.getElementById(id);if(el)el.disabled=localMode;});
-  const createButton=document.querySelector('#newUserName')?.parentElement?.querySelector('button');if(createButton)createButton.disabled=localMode;
-  document.getElementById('cloudUserNotice').textContent=localMode?'Sesión local de emergencia: no crea usuarios en línea. Inicia sesión con el administrador Appwrite para gestionar cuentas compartidas.':'El administrador Appwrite crea usuarios online. Sus cuentas y perfiles se guardan en la base compartida.';
-  const usersRes = {documents:localMode ? await localAll('local_users') : (await apiGet(`/databases/${DB_ID}/collections/${COL.profiles}/documents?limit=100`)).documents};
+  document.getElementById('cloudUserNotice').textContent='El administrador Appwrite crea usuarios en línea. Sus cuentas y perfiles se guardan en la base compartida.';
+  const usersRes = await apiGet(`/databases/${DB_ID}/collections/${COL.profiles}/documents?limit=100`);
   const tbody = document.querySelector('#usersTable tbody');
   tbody.innerHTML = '';
   usersRes.documents.forEach(u => {
@@ -1184,7 +1369,6 @@ async function loadAdminPanel() {
 }
 
 async function createUser() {
-  if(localMode)return alert('Esta es la sesión local de emergencia. Inicia sesión con una cuenta administradora de Appwrite para crear usuarios online.');
   if(!currentProfile||currentProfile.role!=='admin')return alert('Solo un administrador puede crear usuarios.');
   const name = document.getElementById('newUserName').value.trim();
   const email = document.getElementById('newUserEmail').value.trim().toLowerCase();
@@ -1208,7 +1392,6 @@ async function createUser() {
 
 async function toggleBlock(id, current) {
   if(!requireAdminAction())return;
-  if(localMode){const u=(await localAll('local_users')).find(x=>x.$id===id);if(u){u.is_blocked=!current;await localPut('local_users',u);}await loadAdminPanel();return;}
   await apiPut(`/databases/${DB_ID}/collections/${COL.profiles}/documents/${id}`, { data: { is_blocked: !current } });
   await loadAdminPanel();
 }
@@ -1216,7 +1399,6 @@ async function toggleBlock(id, current) {
 async function deleteUser(id) {
   if(!requireAdminAction())return;
   if (!confirm('¿Eliminar?')) return;
-  if(localMode){if(localSession&&localSession.$id===id)return alert('No puedes eliminar la cuenta que está usando la sesión.');await localDelete('local_users',id);await loadAdminPanel();return;}
   await apiDelete(`/databases/${DB_ID}/collections/${COL.profiles}/documents/${id}`);
   await loadAdminPanel();
 }
@@ -1253,12 +1435,14 @@ async function loadDashboard() {
 // 🚀 INICIALIZAR
 // ==========================================
 initAnnouncements();
-if(location.protocol==='file:')setConnectionState('● Archivo local: para Appwrite abre desde localhost o GitHub Pages','error');
+if(location.protocol==='file:')setConnectionState('● Archivo local: Appwrite requiere localhost o HTTPS','error');
 (async () => {
   try {
     currentUser = await apiGet('/account');
     if (currentUser) await loadProfile();
-  } catch (e) {}
+  } catch (e) {
+    if(location.protocol!=='file:'&&e.code!==401)setConnectionState('● No se pudo verificar Appwrite: '+e.message,'error');
+  }
 })();
 </script>
 </body>
