@@ -438,6 +438,16 @@ async function getAllStudentGradeRecords(){
     offset+=page.documents.length;
   }
 }
+async function getAllStudents(){
+  const base=`/databases/${DB_ID}/collections/${COL.students}/documents`;
+  const pageSize=100;let offset=0;const students=[];
+  while(true){
+    const page=await apiGet(`${base}?limit=${pageSize}&offset=${offset}`);
+    students.push(...page.documents);
+    if(page.documents.length<pageSize)return students;
+    offset+=page.documents.length;
+  }
+}
 
 // ==========================================
 // 🔐 AUTENTICACIÓN
@@ -591,8 +601,8 @@ async function loadStudents() {
   const gradeId = document.getElementById('selGrade').value;
   const tbody = document.querySelector('#studentsTable tbody');
   if (!gradeId) { tbody.innerHTML='<tr><td colspan="4">Selecciona un grado para ver sus estudiantes.</td></tr>'; return; }
-  const result = await apiGet(`/databases/${DB_ID}/collections/${COL.students}/documents?limit=100`);
-  const myStudents = result.documents.filter(s => s.grade_id === gradeId).sort((a,b) => a.order_number - b.order_number);
+  const students = await getAllStudents();
+  const myStudents = students.filter(s => s.grade_id === gradeId).sort((a,b) => a.order_number - b.order_number);
   tbody.innerHTML = '';
   if (myStudents.length === 0) { tbody.innerHTML = '<tr><td colspan="4">Sin estudiantes</td></tr>'; return; }
   const isAdmin = currentProfile && currentProfile.role === 'admin';
@@ -761,8 +771,8 @@ async function renderAttendanceGrid() {
   asistStudents = [];
   if (gradeId) {
     try {
-      const result = await apiGet(`/databases/${DB_ID}/collections/${COL.students}/documents?limit=100`);
-      asistStudents = result.documents.filter(s => s.grade_id === gradeId).sort((a,b) => a.order_number - b.order_number);
+      const students = await getAllStudents();
+      asistStudents = students.filter(s => s.grade_id === gradeId).sort((a,b) => a.order_number - b.order_number);
     } catch (e) { console.error(e); alert('Error cargando estudiantes: ' + e.message); }
   }
 
@@ -1151,8 +1161,8 @@ async function loadGradesTable() {
   renderCompetencyDescriptions();
   document.getElementById('gradeLegacyNotice').innerHTML='';
   try{
-    const studentsRes=await apiGet(`/databases/${DB_ID}/collections/${COL.students}/documents?limit=100`);
-    const students=studentsRes.documents.filter(student=>student.grade_id===gradeId).sort((a,b)=>a.order_number-b.order_number);
+    const allStudents=await getAllStudents();
+    const students=allStudents.filter(student=>student.grade_id===gradeId).sort((a,b)=>a.order_number-b.order_number);
     if(students.length===0){document.getElementById('gradesGrid').innerHTML='<p>No hay estudiantes en este grado.</p>';return;}
     const gradeRecords=await getAllStudentGradeRecords();
     let hasLegacyRecords=false;
@@ -1233,8 +1243,8 @@ async function saveGrades(){
 async function loadBoletinStudents() {
   const gradeId = document.getElementById('boletinGrade').value;
   if (!gradeId) return;
-  const result = await apiGet(`/databases/${DB_ID}/collections/${COL.students}/documents?limit=100`);
-  const myStudents = result.documents.filter(s => s.grade_id === gradeId).sort((a,b) => a.order_number - b.order_number);
+  const students = await getAllStudents();
+  const myStudents = students.filter(s => s.grade_id === gradeId).sort((a,b) => a.order_number - b.order_number);
   const sel = document.getElementById('boletinStudent');
   sel.innerHTML = '<option value="">-- Estudiante --</option>';
   myStudents.forEach(s => { sel.innerHTML += `<option value="${s.$id}">${s.last_name}, ${s.first_name}</option>`; });
@@ -1305,8 +1315,8 @@ function printBoletin() {
 async function generateReport() {
   const gradeId = document.getElementById('reportGrade').value;
   if (!gradeId) return;
-  const studentsRes = await apiGet(`/databases/${DB_ID}/collections/${COL.students}/documents?limit=100`);
-  const students = studentsRes.documents.filter(s => s.grade_id === gradeId);
+  const allStudents = await getAllStudents();
+  const students = allStudents.filter(s => s.grade_id === gradeId);
   
   const gradeRecords=await getAllStudentGradeRecords();
   let prom = 0, apl = 0, pend = 0;
@@ -1418,11 +1428,8 @@ async function loadDashboard() {
   const gradesRes = await apiGet(`/databases/${DB_ID}/collections/${COL.grades}/documents?limit=100`);
   const grades = gradesRes.documents;
   
-  let totalStudents = 0;
-  const studentsRes = await apiGet(`/databases/${DB_ID}/collections/${COL.students}/documents?limit=100`);
-  for (const g of grades) {
-    totalStudents += studentsRes.documents.filter(s => s.grade_id === g.$id).length;
-  }
+  const students = await getAllStudents();
+  const totalStudents = grades.reduce((total, grade) => total + students.filter(student => student.grade_id === grade.$id).length, 0);
   
   document.getElementById('dashboardStats').innerHTML = `
     <div class="stats-grid">
