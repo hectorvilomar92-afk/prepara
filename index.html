@@ -197,6 +197,12 @@ input.cell { width: 55px; padding: 6px; text-align: center; border: 1px solid #c
         <label>Grado: <select id="gradeGrade" onchange="loadSubjects()"></select></label>
         <label>Asignatura: <select id="gradeSubject" onchange="loadGradesTable()"></select></label>
       </div>
+      <div class="config-grid" style="margin-top:12px;align-items:end;">
+        <button class="btn btn-info" onclick="loadSavedGradesList()">📂 Buscar calificaciones guardadas</button>
+        <label>Registro guardado: <select id="savedGradesSelect"><option value="">-- Busca calificaciones guardadas --</option></select></label>
+        <button class="btn btn-warning" onclick="openSavedGrades()">Abrir para corregir</button>
+      </div>
+      <p id="savedGradesStatus" style="font-size:13px;color:#555;margin:8px 0;"></p>
       <p id="competencyInstructions" style="font-size:13px;color:#555;margin:12px 0;">Selecciona la competencia oficial que corresponde a cada grupo o usa una descripción personalizada. El PC promedia los cuatro períodos; si hay RP, se toma la nota de recuperación para ese período. La calificación final promedia PC1–PC4.</p>
       <div id="competencyDescriptions" class="competency-descriptions"></div>
       <p id="competencySource" style="font-size:12px;color:#555;margin:-4px 0 14px;"></p>
@@ -319,6 +325,7 @@ let currentProfile = null;
 function isAdminUser(){return !!currentProfile && currentProfile.role === 'admin';}
 function requireAdminAction(){if(isAdminUser())return true;alert('⛔ Esta opción está disponible solo para el administrador.');return false;}
 let asistDates = [], asistMarks = {}, attendanceSavedRecords = [], attendanceLoadedId = '', attendanceContext = '';
+let savedGradesList = [];
 const monthNames = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 
 // ==========================================
@@ -1152,6 +1159,71 @@ function readGradeInput(row,fieldName,studentName){
   const value=Number(field.value);
   if(!Number.isFinite(value)||value<0||value>100)throw Error(`La nota de ${studentName} debe estar entre 0 y 100.`);
   return value;
+}
+
+async function loadSavedGradesList(){
+  const select=document.getElementById('savedGradesSelect'),status=document.getElementById('savedGradesStatus');
+  select.innerHTML='<option value="">Cargando calificaciones guardadas...</option>';
+  status.textContent='';
+  try{
+    const [records,allStudents,gradesResult,subjectsResult]=await Promise.all([
+      getAllStudentGradeRecords(),
+      getAllStudents(),
+      apiGet(`/databases/${DB_ID}/collections/${COL.grades}/documents?limit=100`),
+      apiGet(`/databases/${DB_ID}/collections/${COL.subjects}/documents?limit=100`)
+    ]);
+    const studentsById=new Map(allStudents.map(student=>[student.$id,student]));
+    const gradesById=new Map(gradesResult.documents.map(grade=>[grade.$id,grade]));
+    const subjectsById=new Map(subjectsResult.documents.map(subject=>[subject.$id,subject]));
+    const groups=new Map();
+    records.forEach(record=>{
+      const student=studentsById.get(record.student_id),grade=student&&gradesById.get(student.grade_id),subject=subjectsById.get(record.subject_id);
+      if(!student||!grade||!subject)return;
+      const key=`${grade.$id}:${subject.$id}`;
+      let group=groups.get(key);
+      if(!group){
+        group={gradeId:grade.$id,gradeName:grade.name,subjectId:subject.$id,subjectName:subject.name,students:new Set()};
+        groups.set(key,group);
+      }
+      group.students.add(student.$id);
+    });
+    savedGradesList=[...groups.values()].sort((a,b)=>sortGrades({name:a.gradeName},{name:b.gradeName})||a.subjectName.localeCompare(b.subjectName,'es'));
+    select.innerHTML='<option value="">-- Selecciona un registro guardado --</option>';
+    savedGradesList.forEach((group,index)=>{
+      select.add(new Option(`${group.gradeName} · ${group.subjectName} (${group.students.size} estudiantes)`,String(index)));
+    });
+    status.textContent=savedGradesList.length
+      ? 'Selecciona un registro para cargar sus notas guardadas en la tabla. Podrás corregirlas y guardarlas nuevamente.'
+      : 'No se encontraron calificaciones guardadas.';
+  }catch(error){
+    console.error('No se pudieron buscar las calificaciones guardadas:',error);
+    select.innerHTML='<option value="">No se pudieron cargar las calificaciones</option>';
+    status.textContent=`Error buscando calificaciones guardadas: ${error.message}`;
+  }
+}
+
+async function openSavedGrades(){
+  const index=document.getElementById('savedGradesSelect').value;
+  const group=savedGradesList[Number(index)];
+  if(index===''||!group)return alert('Busca y selecciona primero un registro guardado.');
+  const gradeSelect=document.getElementById('gradeGrade'),subjectSelect=document.getElementById('gradeSubject');
+  gradeSelect.value=group.gradeId;
+  await loadSubjects();
+  if(subjectSelect.value!==group.subjectId){
+    subjectSelect.value=group.subjectId;
+    if(subjectSelect.value!==group.subjectId){
+      document.getElementById('savedGradesStatus').textContent='No se pudo abrir el registro: la asignatura ya no está disponible para ese grado.';
+      return;
+    }
+  }
+  document.getElementById('gradesGrid').innerHTML='';
+  await loadGradesTable();
+  if(!document.querySelector('#gradesGrid tbody')){
+    document.getElementById('savedGradesStatus').textContent='No se pudo mostrar el registro guardado. Revisa el mensaje de error y vuelve a intentarlo.';
+    return;
+  }
+  document.getElementById('savedGradesStatus').textContent=`Notas cargadas: ${group.gradeName} · ${group.subjectName}. Corrige la tabla y pulsa “Guardar Notas” para conservar los cambios.`;
+  document.getElementById('gradesGrid').scrollIntoView({behavior:'smooth',block:'start'});
 }
 
 async function loadGradesTable() {
