@@ -60,8 +60,6 @@ input.cell { width: 55px; padding: 6px; text-align: center; border: 1px solid #c
 .dias-semana-selector { background: #e3f2fd; border: 2px solid #2196F3; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
 .dias-checkboxes { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 12px; }
 .dias-checkboxes label { display: flex; align-items: center; gap: 6px; cursor: pointer; padding: 8px 12px; background: white; border-radius: 6px; border: 1px solid #ddd; }
-#boletinView { display: none; padding: 30px; background: white; max-width: 900px; margin: 0 auto; }
-.boletin-header { text-align: center; border-bottom: 3px double #000; padding-bottom: 15px; margin-bottom: 20px; }
 .center-print-header { display:flex; align-items:center; justify-content:center; gap:16px; text-align:center; }
 .center-print-logo { max-width:100px; max-height:80px; object-fit:contain; }
 .center-print-info { font-size:12px; line-height:1.4; }
@@ -69,23 +67,12 @@ input.cell { width: 55px; padding: 6px; text-align: center; border: 1px solid #c
 .center-name { font-size:20px; font-weight:bold; }
 .print-document-title { margin:8px 0; }
 .print-detail { font-size:12px; }
-.boletin-info { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; border: 1px solid #000; padding: 15px; }
-.boletin-table { width: 100%; border: 1px solid #000; }
-.boletin-table th { background: #e9ecef !important; -webkit-print-color-adjust: exact; }
-.firma-section { margin-top: 60px; display: flex; justify-content: space-between; gap: 20px; }
-.firma-box { text-align: center; width: 30%; border-top: 1px solid #000; padding-top: 8px; font-size: 12px; }
 .center-config-logo {max-width:120px;max-height:100px;object-fit:contain;margin:8px 0;display:none}
 #announcementOverlay {display:none;position:fixed;inset:0;z-index:99999;background:rgba(7,20,44,.76);align-items:center;justify-content:center;padding:24px}
 #announcementCard {background:#fff;width:min(760px,94vw);min-height:260px;border-radius:18px;padding:38px 44px;box-shadow:0 18px 70px rgba(0,0,0,.4);text-align:center;display:flex;flex-direction:column;justify-content:center}
 #announcementCard h2 {color:#1e3c72;font-size:clamp(26px,4vw,42px);margin-bottom:22px}
 #announcementText {font-size:clamp(21px,3vw,32px);line-height:1.4;white-space:pre-wrap;overflow-wrap:anywhere}
 #announcementMeta {font-size:14px;color:#687386;margin-top:22px}
-@media print {
-  @page { size: A4 landscape; margin: 10mm; }
-  body * { visibility: hidden; }
-  #boletinView, #boletinView * { visibility: visible; }
-  #boletinView { position: absolute; left: 0; top: 0; width: 100%; max-width: none; padding: 8px; display: block !important; }
-}
 </style>
 </head>
 <body>
@@ -137,7 +124,7 @@ input.cell { width: 55px; padding: 6px; text-align: center; border: 1px solid #c
       <div class="config-grid"><label>Grado/Sección: <select id="selGrade" onchange="loadStudents()"></select></label></div>
       <div class="excel-upload admin-only">
         <h4>📥 Importar desde Excel</h4>
-        <p style="font-size:12px;color:#555;margin:6px 0;">Acepta las columnas Apellidos y Nombres. Para ubicar cada grupo, agrega Grado y Sección, usa una hoja por grupo con nombre como “1ro A”, o selecciona un grado arriba si el archivo contiene un solo grupo.</p>
+        <p style="font-size:12px;color:#555;margin:6px 0;">Acepta las columnas Apellidos y Nombres. Para ubicar cada grupo, agrega Grado y Sección, usa una hoja por grupo con nombre como “1ro A”, o selecciona un grado arriba si el archivo contiene un solo grupo. La columna ID SIGERD es opcional.</p>
         <input type="file" id="excelFile" accept=".xlsx,.xls" onchange="showExcelSelection(event)" style="margin: 10px 0;">
         <button class="btn btn-info" onclick="document.getElementById('excelFile').click()">Seleccionar Archivo</button>
         <span id="excelFileName" style="font-size:13px;margin:0 8px;color:#555;">Ningún archivo seleccionado</span>
@@ -147,6 +134,7 @@ input.cell { width: 55px; padding: 6px; text-align: center; border: 1px solid #c
         <input type="number" id="newOrder" placeholder="N° Orden" style="width: 100px;">
         <input type="text" id="newLast" placeholder="Apellidos" style="flex: 1;">
         <input type="text" id="newFirst" placeholder="Nombres" style="flex: 1;">
+        <input type="text" id="newSigerdId" placeholder="ID SIGERD" style="flex: 1;">
         <button class="btn btn-success" onclick="addStudent()">➕ Agregar</button>
       </div>
       <p id="studentsHint" style="color:#666; margin:10px 0;">Selecciona un grado para ver la lista de estudiantes.</p>
@@ -218,12 +206,15 @@ input.cell { width: 55px; padding: 6px; text-align: center; border: 1px solid #c
       <h3>🎓 Boletines</h3>
       <div class="config-grid">
         <label>Grado: <select id="boletinGrade" onchange="loadBoletinStudents()"></select></label>
-        <label>Estudiante: <select id="boletinStudent"></select></label>
+        <label>Estudiante: <select id="boletinStudent" onchange="loadBoletinStudentDetails()"></select></label>
+        <label>ID SIGERD: <input id="boletinSigerdId" type="text" maxlength="50" placeholder="Número de identificación"></label>
         <label>Año escolar: <input id="boletinSchoolYear" type="text" placeholder="Ej.: 2026-2027"></label>
       </div>
-      <button class="btn btn-warning" onclick="generateBoletin()">📄 Generar</button>
-      <button class="btn btn-info" onclick="openOfficialBoletinTemplate()">📑 Abrir plantilla oficial MINERD</button>
-      <button class="btn btn-success" onclick="printBoletin()">🖨️ Imprimir/PDF</button>
+      <label style="display:block;font-weight:bold;font-size:13px;margin:0 0 12px;">Observaciones del boletín
+        <textarea id="boletinObservations" rows="3" maxlength="1200" placeholder="Observaciones para este estudiante" style="display:block;width:100%;margin-top:5px;padding:10px;border:1px solid #ddd;border-radius:6px;"></textarea>
+      </label>
+      <button class="btn btn-warning" onclick="generateBoletin()">📄 Generar boletín oficial completo</button>
+      <button class="btn btn-success" onclick="printBoletin()">🖨️ Abrir para imprimir</button>
       <button class="btn btn-success" onclick="saveBoletinRecord()">💾 Guardar boletín</button>
       <div class="config-grid" style="margin-top:16px;align-items:end;">
         <button class="btn btn-info" onclick="loadSavedBoletines()">🔎 Buscar boletines guardados</button>
@@ -231,7 +222,7 @@ input.cell { width: 55px; padding: 6px; text-align: center; border: 1px solid #c
         <button class="btn btn-warning" onclick="openSavedBoletin()">Abrir boletín guardado</button>
       </div>
       <p id="boletinSaveStatus" style="font-size:13px;color:#555;margin:8px 0;"></p>
-      <p style="font-size:12px;color:#555;margin:8px 0;">La plantilla PDF oficial se abre aparte y se imprime sin rellenar automáticamente. El boletín generado aquí puede imprimirse y guardarse como versión histórica en la nube.</p>
+      <p style="font-size:12px;color:#555;margin:8px 0;">Se genera el PDF oficial del grado con los datos del estudiante, centro y calificaciones disponibles. Las firmas se completan a mano.</p>
       <p style="font-size:12px;margin:6px 0;"><a href="https://educando.edu.do/2023/09/boletines-de-calificaciones-del-nivel-secundario/" target="_blank" rel="noopener noreferrer">Fuente oficial: PDFs de boletines del Nivel Secundario (1.º a 6.º)</a></p>
     </div>
     <div id="reports" class="section">
@@ -264,7 +255,9 @@ input.cell { width: 55px; padding: 6px; text-align: center; border: 1px solid #c
         <label>Código del centro<input id="centerCode" placeholder="Código"></label>
         <label>Regional<input id="centerRegional" placeholder="Regional"></label>
         <label>Distrito<input id="centerDistrict" placeholder="Distrito"></label>
+        <label>Provincia<input id="centerProvince" placeholder="Provincia"></label>
         <label>Municipio<input id="centerMunicipality" placeholder="Municipio"></label>
+        <label>Tanda<input id="centerShift" placeholder="Matutina, vespertina, etc."></label>
         <label>Dirección<input id="centerAddress" placeholder="Dirección"></label>
         <label>Teléfono<input id="centerPhone" placeholder="Teléfono"></label>
         <label>Director/a<input id="centerDirector" placeholder="Nombre del director/a"></label>
@@ -281,35 +274,8 @@ input.cell { width: 55px; padding: 6px; text-align: center; border: 1px solid #c
 
 <div id="announcementOverlay" role="alertdialog" aria-live="assertive"><div id="announcementCard"><h2>📣 AVISO</h2><div id="announcementText"></div><div id="announcementMeta">Este aviso desaparecerá en un minuto.</div></div></div>
 
-<div id="boletinView">
-  <div class="boletin-header">
-    <h3>DIRECCIÓN GENERAL DE EDUCACIÓN</h3>
-    <h2>BOLETÍN DE CALIFICACIONES</h2>
-    <h3>AÑO ESCOLAR 2025 - 2026</h3>
-  </div>
-  <div class="boletin-info">
-    <div><strong>NOMBRES:</strong> <span id="bFirst"></span></div>
-    <div><strong>APELLIDOS:</strong> <span id="bLast"></span></div>
-    <div><strong>SECCIÓN:</strong> <span id="bGrade"></span></div>
-    <div><strong>N° ORDEN:</strong> <span id="bOrder"></span></div>
-  </div>
-  <table class="boletin-table">
-    <thead>
-      <tr><th style="width:25%;">ASIGNATURAS</th><th>PC1</th><th>PC2</th><th>PC3</th><th>PC4</th><th>FINAL</th><th>EC</th><th>EE</th><th>SITUACIÓN</th></tr>
-    </thead>
-    <tbody id="boletinBody"></tbody>
-  </table>
-  <div style="margin-top: 20px; border: 1px solid #000; padding: 12px;">
-    <h4>SITUACIÓN:</h4><p id="bStatus"></p>
-  </div>
-  <div class="firma-section">
-    <div class="firma-box">PADRE/MADRE/TUTOR</div>
-    <div class="firma-box">MAESTRO/A</div>
-    <div class="firma-box">DIRECTOR/A</div>
-  </div>
-</div>
-
 <script src="https://cdn.jsdelivr.net/npm/appwrite@29.0.0"></script>
+<script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
 <script src="./minerd-competencies.js"></script>
 <script>
 // ==========================================
@@ -332,12 +298,12 @@ const COL = {
   bulletin_records: 'bulletin_records'
 };
 const OFFICIAL_BOLETIN_PDFS = {
-  1: 'https://educando.edu.do/wp-content/uploads/2023/09/Boletin-de-calificaciones-1er-grado-NS_110723.pdf',
-  2: 'https://educando.edu.do/wp-content/uploads/2023/09/Boletin-de-calificaciones-2do-grado-NS_110723.pdf',
-  3: 'https://educando.edu.do/wp-content/uploads/2023/09/Boletin-de-calificaciones-3er-grado-NS_110723.pdf',
-  4: 'https://educando.edu.do/wp-content/uploads/2023/09/Boletin-de-calificaciones-4to-grado-NS_110723.pdf',
-  5: 'https://educando.edu.do/wp-content/uploads/2023/09/Boletin-de-calificaciones-5to-grado-NS_110723.pdf',
-  6: 'https://educando.edu.do/wp-content/uploads/2023/09/Boletin-de-calificaciones-6to-grado-NS_110723.pdf'
+  1: './assets/boletines-oficiales/grado-1.pdf',
+  2: './assets/boletines-oficiales/grado-2.pdf',
+  3: './assets/boletines-oficiales/grado-3.pdf',
+  4: './assets/boletines-oficiales/grado-4.pdf',
+  5: './assets/boletines-oficiales/grado-5.pdf',
+  6: './assets/boletines-oficiales/grado-6.pdf'
 };
 
 let currentUser = null;
@@ -650,14 +616,16 @@ async function addStudent() {
   const order = parseInt(document.getElementById('newOrder').value);
   const last = document.getElementById('newLast').value.trim();
   const first = document.getElementById('newFirst').value.trim();
+  const sigerdId = document.getElementById('newSigerdId').value.trim();
   if (!gradeId || !order || !last || !first) return alert("Completa todos los campos");
   await apiPost(`/databases/${DB_ID}/collections/${COL.students}/documents`, {
     documentId: 'unique()',
-    data: { grade_id: gradeId, order_number: order, last_name: last, first_name: first }
+    data: { grade_id: gradeId, order_number: order, last_name: last, first_name: first, sigerd_id: sigerdId }
   });
   document.getElementById('newOrder').value = '';
   document.getElementById('newLast').value = '';
   document.getElementById('newFirst').value = '';
+  document.getElementById('newSigerdId').value = '';
   await loadStudents();
 }
 
@@ -713,6 +681,7 @@ async function processExcel(workbook) {
     const numIdx=findColumn(headers,['numero','n°','no','num','#']);
     const apIdx=findColumn(headers,['apellido','apellidos']);
     const nomIdx=findColumn(headers,['nombre','nombres']);
+    const sigerdIdx=findColumn(headers,['id sigerd','sigerd','id estudiante']);
     const gradeIdx=findColumn(headers,['grado','curso','nivel']);
     const sectionIdx=findColumn(headers,['seccion','sección','grupo','paralelo']);
     if(apIdx===-1&&nomIdx===-1){skipped+=data.length-1;continue;}
@@ -730,7 +699,7 @@ async function processExcel(workbook) {
       const groupName=section?`${gradeName} ${section}`:gradeName;
       let grade=gradeCache.get(groupName);if(!grade){grade=await ensureGrade(groupName);gradeCache.set(groupName,grade);}
       if(!firstImportedGradeId)firstImportedGradeId=grade.$id;
-      await apiPost(`/databases/${DB_ID}/collections/${COL.students}/documents`,{documentId:'unique()',data:{grade_id:grade.$id,order_number:(numIdx!==-1&&row[numIdx])?parseInt(row[numIdx]):(i),last_name:ap||'',first_name:nom||''}});
+      await apiPost(`/databases/${DB_ID}/collections/${COL.students}/documents`,{documentId:'unique()',data:{grade_id:grade.$id,order_number:(numIdx!==-1&&row[numIdx])?parseInt(row[numIdx]):(i),last_name:ap||'',first_name:nom||'',sigerd_id:sigerdIdx!==-1?String(row[sigerdIdx]||'').trim():''}});
       count++;
     }
   }
@@ -1039,11 +1008,11 @@ function getGradeSummary(records){
     const finalScore=complete?Math.round(competencyAverages.reduce((sum,value)=>sum+value,0)/4):null;
     const status=finalScore===null?'EN PROCESO':finalScore>=70?'PROMOVIDO':finalScore>=60?'CON PENDIENTE':'APLAZADO';
     const legacy=records.find(record=>!COMPETENCY_RECORD_STATUS.test(String(record.status||'')))||null;
-    return {competencyRecords:byCompetency,competencyAverages,finalScore,status,ec:byCompetency[0]?.ec??legacy?.ec??null,ee:byCompetency[0]?.ee??legacy?.ee??null,legacy,hasCompetencyRecords:true};
+    return {competencyRecords:byCompetency,competencyAverages,finalScore,status,ec:byCompetency[0]?.ec??legacy?.ec??null,ee:byCompetency[0]?.ee??legacy?.ee??null,specialScore:byCompetency[0]?.special_score??legacy?.special_score??null,legacy,hasCompetencyRecords:true};
   }
   const legacy=records.find(record=>record)||null;
   const finalScore=legacy&&legacy.final_score!==null&&legacy.final_score!==undefined?Number(legacy.final_score):null;
-  return {competencyRecords:[null,null,null,null],competencyAverages:[null,null,null,null],finalScore,status:legacy?.status||'-',ec:legacy?.ec??null,ee:legacy?.ee??null,legacy,hasCompetencyRecords:false};
+  return {competencyRecords:[null,null,null,null],competencyAverages:[null,null,null,null],finalScore,status:legacy?.status||'-',ec:legacy?.ec??null,ee:legacy?.ee??null,specialScore:legacy?.special_score??null,legacy,hasCompetencyRecords:false};
 }
 function competencyDescriptionStorageKey(){
   const gradeId=document.getElementById('gradeGrade').value,subjectId=document.getElementById('gradeSubject').value;
@@ -1266,7 +1235,7 @@ async function loadGradesTable() {
     let html='<table><thead><tr><th rowspan="2" style="min-width:180px;">Estudiante</th>';
     for(let competency=1;competency<=4;competency++)html+=`<th colspan="8" data-competency-heading="${competency}">Competencia ${competency}</th>`;
     for(let competency=1;competency<=4;competency++)html+=`<th rowspan="2">PC${competency}</th>`;
-    html+='<th rowspan="2">Calificación final</th><th rowspan="2">Eval. completiva</th><th rowspan="2">Eval. extraordinaria</th><th rowspan="2">Situación</th></tr><tr>';
+    html+='<th rowspan="2">Calificación final</th><th rowspan="2">Eval. completiva</th><th rowspan="2">Eval. extraordinaria</th><th rowspan="2">Eval. especial</th><th rowspan="2">Situación</th></tr><tr>';
     for(let competency=1;competency<=4;competency++)for(let period=1;period<=4;period++)html+=`<th>P${period}</th><th>RP${period}</th>`;
     html+='</tr></thead><tbody>';
     students.forEach(student=>{
@@ -1289,6 +1258,7 @@ async function loadGradesTable() {
       html+=`<td data-final-score style="font-weight:bold;">${formatGradeValue(summary.finalScore)}</td>
         <td><input class="cell" type="number" min="0" max="100" step="0.1" data-field="ec" value="${escapeHtml(summary.ec??'')}"></td>
         <td><input class="cell" type="number" min="0" max="100" step="0.1" data-field="ee" value="${escapeHtml(summary.ee??'')}"></td>
+      <td><input class="cell" type="number" min="0" max="100" step="0.1" data-field="special_score" value="${escapeHtml(summary.specialScore??'')}"></td>
         <td data-grade-status class="${finalClass}">${escapeHtml(summary.status)}${legacyHint}</td></tr>`;
     });
     html+='</tbody></table>';
@@ -1317,7 +1287,8 @@ async function saveGrades(){
         if(competency===1){
           data.ec=readGradeInput(row,'ec',studentName);
           data.ee=readGradeInput(row,'ee',studentName);
-          if(data.ec!==null||data.ee!==null)hasScores=true;
+          data.special_score=readGradeInput(row,'special_score',studentName);
+          if(data.ec!==null||data.ee!==null||data.special_score!==null)hasScores=true;
         }
         const existing=records.find(record=>record.status===data.status);
         if(!hasScores&&!existing)continue;
@@ -1339,18 +1310,102 @@ async function saveGrades(){
 // ==========================================
 async function loadBoletinStudents() {
   const gradeId = document.getElementById('boletinGrade').value;
+  const sel = document.getElementById('boletinStudent');
+  sel.innerHTML = '<option value="">-- Estudiante --</option>';
+  document.getElementById('boletinSigerdId').value = '';
   if (!gradeId) return;
   const students = await getAllStudents();
   const myStudents = students.filter(s => s.grade_id === gradeId).sort((a,b) => a.order_number - b.order_number);
-  const sel = document.getElementById('boletinStudent');
-  sel.innerHTML = '<option value="">-- Estudiante --</option>';
   myStudents.forEach(s => { sel.innerHTML += `<option value="${s.$id}">${s.last_name}, ${s.first_name}</option>`; });
+}
+
+async function loadBoletinStudentDetails(){
+  const studentId=document.getElementById('boletinStudent').value;
+  const input=document.getElementById('boletinSigerdId');
+  input.value='';
+  if(!studentId)return;
+  try{
+    const student=await apiGet(`/databases/${DB_ID}/collections/${COL.students}/documents/${studentId}`);
+    input.value=student.sigerd_id||'';
+  }catch(error){
+    console.error('No se pudo cargar el ID SIGERD del estudiante:',error);
+    alert(`No se pudo cargar el ID SIGERD: ${error.message}`);
+  }
+}
+
+async function getAllAttendanceRecords(){
+  const base=`/databases/${DB_ID}/collections/${COL.attendance_records}/documents`;
+  const pageSize=100;let offset=0;const records=[];
+  while(true){
+    const page=await apiGet(`${base}?limit=${pageSize}&offset=${offset}`);
+    records.push(...page.documents);
+    if(page.documents.length<pageSize)return records;
+    offset+=page.documents.length;
+  }
+}
+
+function parseSchoolYear(value){
+  const match=String(value||'').trim().match(/^((?:19|20)\d{2})\s*[-–/]\s*((?:19|20)\d{2})$/);
+  if(!match||Number(match[2])!==Number(match[1])+1)throw new Error('El año escolar debe tener el formato 2026-2027.');
+  return {start:Number(match[1]),end:Number(match[2])};
+}
+
+async function getBoletinAttendanceSummary(gradeId,studentId,schoolYear){
+  const {start,end}=parseSchoolYear(schoolYear);
+  const records=await getAllAttendanceRecords();
+  const attendanceByDate=new Map();
+  records.filter(record=>record.grade_id===gradeId).forEach(record=>{
+    let dates,marks;
+    try{
+      dates=typeof record.dates==='string'?JSON.parse(record.dates):record.dates;
+      marks=typeof record.marks==='string'?JSON.parse(record.marks):record.marks;
+    }catch(error){throw new Error(`El pase de asistencia ${record.$id} contiene datos no válidos: ${error.message}`);}
+    if(!Array.isArray(dates)||!marks||typeof marks!=='object')return;
+    dates.forEach((entry,index)=>{
+      const dateText=typeof entry==='string'?entry:entry?.realDate;
+      if(!dateText)return;
+      const date=new Date(`${dateText}T00:00:00`);
+      if(Number.isNaN(date.getTime()))return;
+      const month=date.getMonth(),year=date.getFullYear();
+      const inSchoolYear=(year===start&&month>=7)||(year===end&&month<=5);
+      if(!inSchoolYear)return;
+      const period=month>=7&&month<=9?0:month>=10||month===0?1:month<=2?2:3;
+      const mark=marks[studentId]?.[index];
+      if(!['P','A','T','E'].includes(mark))return;
+      if(!attendanceByDate.has(dateText))attendanceByDate.set(dateText,{period,marks:new Set()});
+      attendanceByDate.get(dateText).marks.add(mark);
+    });
+  });
+  const periods=Array.from({length:4},()=>({attendance:0,absence:0}));
+  attendanceByDate.forEach(({period,marks})=>{
+    if([...marks].some(mark=>mark==='P'||mark==='T'||mark==='E'))periods[period].attendance++;
+    else if(marks.has('A'))periods[period].absence++;
+  });
+  const totals=periods.reduce((sum,item)=>({attendance:sum.attendance+item.attendance,absence:sum.absence+item.absence}),{attendance:0,absence:0});
+  totals.percentage=totals.attendance+totals.absence?Math.round(totals.attendance/(totals.attendance+totals.absence)*100):null;
+  return {periods,...totals};
+}
+
+function getSubjectPeriodScores(summary){
+  return summary.competencyRecords.map(record=>Array.from({length:4},(_,index)=>{
+    if(!record)return null;
+    const recovery=record[`rp${index+1}`],score=record[`p${index+1}`];
+    const value=recovery!==null&&recovery!==undefined&&recovery!==''?Number(recovery):score!==null&&score!==undefined&&score!==''?Number(score):null;
+    return value!==null&&Number.isFinite(value)?value:null;
+  }));
+}
+
+async function getBoletinTeacherName(grade){
+  if(!grade.teacher_id)return '';
+  const teacher=await apiGet(`/databases/${DB_ID}/collections/${COL.profiles}/documents/${grade.teacher_id}`);
+  return teacher.full_name||teacher.name||'';
 }
 
 async function generateBoletin() {
   const gradeId = document.getElementById('boletinGrade').value;
   const studentId = document.getElementById('boletinStudent').value;
   if (!gradeId || !studentId) return alert("Selecciona grado y estudiante");
+  const pdfWindow=window.open('about:blank','_blank');
 
   try {
     const student = await apiGet(`/databases/${DB_ID}/collections/${COL.students}/documents/${studentId}`);
@@ -1358,7 +1413,17 @@ async function generateBoletin() {
     const subjects = await ensureSubjectsForGrade(gradeId);
     const records=(await getAllStudentGradeRecords()).filter(record=>record.student_id===studentId);
     const schoolYear=document.getElementById('boletinSchoolYear').value.trim()||getCurrentAcademicYear();
+    parseSchoolYear(schoolYear);
     document.getElementById('boletinSchoolYear').value=schoolYear;
+    const sigerdId=document.getElementById('boletinSigerdId').value.trim();
+    if((student.sigerd_id||'')!==sigerdId){
+      await apiPut(`/databases/${DB_ID}/collections/${COL.students}/documents/${studentId}`,{data:{sigerd_id:sigerdId}});
+    }
+    const center=getCenterConfig();
+    const [teacherName,attendance]=await Promise.all([
+      getBoletinTeacherName(grade),
+      getBoletinAttendanceSummary(gradeId,studentId,schoolYear)
+    ]);
     const bulletinSubjects=[];
     let total = 0, count = 0;
     subjects.forEach(subj => {
@@ -1369,78 +1434,234 @@ async function generateBoletin() {
         subjectId:subj.$id,
         subjectName:subj.name,
         competencyAverages:summary.competencyAverages,
+        periodScores:getSubjectPeriodScores(summary),
         finalScore:fs,
         ec:summary.ec,
         ee:summary.ee,
+        specialScore:summary.specialScore,
         status:summary.status
       });
     });
     const avg = count > 0 ? Number((total / count).toFixed(1)) : 0;
     const status = avg >= 70 ? 'PROMOVIDO/A' : (avg >= 60 ? 'CON ASIGNATURA PENDIENTE' : (count ? 'APLAZADO' : 'SIN CALIFICACIONES'));
     currentBoletinSnapshot={
-      version:1,
+      version:2,
       gradeId,
       gradeName:grade.name||'',
+      gradeNumber:gradeParts(grade.name)?.num||null,
+      section:gradeParts(grade.name)?.section||'',
       studentId,
       student:{
         firstName:student.first_name||'',
         lastName:student.last_name||'',
-        orderNumber:student.order_number||''
+        orderNumber:student.order_number||'',
+        sigerdId:sigerdId
       },
       schoolYear,
+      teacherName,
+      center,
+      observations:document.getElementById('boletinObservations').value.trim(),
+      attendance,
       subjects:bulletinSubjects,
       average:avg,
       status
     };
-    renderBoletinSnapshot(currentBoletinSnapshot);
-    document.getElementById('boletinSaveStatus').textContent='Boletín generado. Puedes imprimirlo o guardar esta versión para consultarla después.';
+    const pdfBytes=await createOfficialBoletinPdf(currentBoletinSnapshot);
+    showOfficialBoletinPdf(pdfBytes,pdfWindow);
+    const missing=[];
+    if(!sigerdId)missing.push('ID SIGERD');
+    if(!gradeParts(grade.name)?.section)missing.push('sección del grado');
+    if(!teacherName)missing.push('docente asignado al grado');
+    ['name','code','shift','district','regional','province','municipality','phone'].forEach(key=>{if(!center[key])missing.push(`dato del centro: ${key}`);});
+    if(bulletinSubjects.some(subject=>subject.finalScore===null))missing.push('calificaciones completas de todas las asignaturas');
+    const additionalWarnings=currentBoletinSnapshot.pdfWarnings||[];
+    document.getElementById('boletinSaveStatus').textContent=`PDF oficial del ${grade.name} generado. ${missing.length||additionalWarnings.length?`Revisa los datos pendientes: ${[...missing,...additionalWarnings].join('; ')}.`:'Los datos disponibles se completaron.'}`;
   } catch (e) {
+    if(pdfWindow&&!pdfWindow.closed)pdfWindow.close();
     console.error(e);
     alert('❌ Error generando boletín: ' + e.message);
   }
 }
 
-function renderBoletinSnapshot(snapshot){
-  if(!snapshot||!snapshot.student||!Array.isArray(snapshot.subjects))throw new Error('El boletín guardado tiene un formato no válido.');
-  document.querySelector('.boletin-header').innerHTML=buildCenterHeaderMarkup('BOLETÍN DE CALIFICACIONES',`AÑO ESCOLAR ${snapshot.schoolYear||''}`);
-  document.getElementById('bFirst').textContent=snapshot.student.firstName||'';
-  document.getElementById('bLast').textContent=snapshot.student.lastName||'';
-  document.getElementById('bGrade').textContent=snapshot.gradeName||'';
-  document.getElementById('bOrder').textContent=snapshot.student.orderNumber||'';
-  const getV=value=>value!==null&&value!==undefined&&value!==''?escapeHtml(String(value)):'-';
-  const tbody=document.getElementById('boletinBody');
-  tbody.innerHTML=snapshot.subjects.length?snapshot.subjects.map(subject=>{
-    const finalScore=subject.finalScore===null||subject.finalScore===undefined?null:Number(subject.finalScore);
-    const cls=finalScore!==null&&finalScore>=70?'status-promovido':finalScore!==null&&finalScore>0?'status-aplazado':'';
-    const averages=Array.isArray(subject.competencyAverages)?subject.competencyAverages:[];
-    return `<tr>
-      <td style="text-align:left;font-weight:bold;">${escapeHtml(subject.subjectName||'')}</td>
-      ${Array.from({length:4},(_,index)=>`<td>${getV(averages[index])}</td>`).join('')}
-      <td style="font-weight:bold;">${getV(subject.finalScore)}</td><td>${getV(subject.ec)}</td><td>${getV(subject.ee)}</td>
-      <td class="${cls}">${escapeHtml(subject.status||'-')}</td></tr>`;
-  }).join(''):'<tr><td colspan="9">No hay asignaturas para este grado.</td></tr>';
-  document.getElementById('bStatus').textContent=`${snapshot.status||'SIN CALIFICACIONES'} - Promedio: ${snapshot.average??0}`;
-  document.getElementById('boletinView').style.display='block';
-  document.getElementById('boletinView').scrollIntoView({behavior:'smooth'});
+function drawBulletinField(page,font,value,x,y,maxWidth,fontSize=8){
+  const text=String(value??'').replace(/\s+/g,' ').trim();
+  if(!text)return;
+  const {rgb}=PDFLib;
+  let size=fontSize;
+  while(size>5&&font.widthOfTextAtSize(text,size)>maxWidth)size-=0.5;
+  const width=Math.min(maxWidth,font.widthOfTextAtSize(text,size));
+  page.drawRectangle({x:x-1,y:y-2,width:width+3,height:size+4,color:rgb(1,1,1)});
+  page.drawText(text,{x,y,size,font,color:rgb(0,0,0)});
 }
 
-function openOfficialBoletinTemplate(){
-  const gradeSelect=document.getElementById('boletinGrade');
-  const gradeName=gradeSelect.selectedOptions[0]?.textContent||'';
-  const gradeNumber=gradeParts(gradeName)?.num;
-  const url=OFFICIAL_BOLETIN_PDFS[gradeNumber];
-  if(!url)return alert('Selecciona un grado de secundaria del 1.º al 6.º.');
-  const link=document.createElement('a');
-  link.href=url;
-  link.target='_blank';
-  link.rel='noopener noreferrer';
-  link.click();
+function drawBulletinCell(page,font,value,centerX,centerY,width=22,fontSize=6){
+  if(value===null||value===undefined||value==='')return;
+  const text=typeof value==='number'?formatGradeValue(value):String(value);
+  let size=fontSize;
+  while(size>4.5&&font.widthOfTextAtSize(text,size)>width)size-=0.5;
+  const textWidth=font.widthOfTextAtSize(text,size);
+  page.drawText(text,{x:centerX-textWidth/2,y:centerY-size*0.35,size,font,color:PDFLib.rgb(0,0,0)});
+}
+
+function wrapBulletinText(text,font,fontSize,maxWidth){
+  const lines=[];
+  String(text||'').split(/\r?\n/).forEach(paragraph=>{
+    const words=paragraph.trim().split(/\s+/).filter(Boolean);
+    if(!words.length){lines.push('');return;}
+    let line='';
+    words.forEach(word=>{
+      const candidate=line?`${line} ${word}`:word;
+      if(line&&font.widthOfTextAtSize(candidate,fontSize)>maxWidth){lines.push(line);line=word;}
+      else line=candidate;
+    });
+    if(line)lines.push(line);
+  });
+  return lines;
+}
+
+function officialBulletinSubjectRow(subjectName,gradeNumber){
+  const name=String(subjectName||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+  if(name.includes('lengua espanola'))return 0;
+  if(name.includes('ingles'))return 1;
+  if(name.includes('frances'))return 2;
+  if(name.includes('matemat'))return 3;
+  if(name.includes('ciencias sociales'))return 4;
+  if(name.includes('ciencias de la naturaleza')||name.includes('ciencias naturales'))return 5;
+  if(name.includes('educacion artistica'))return 6;
+  if(name.includes('educacion fisica'))return 7;
+  if(name.includes('formacion integral')||name.includes('humana y religiosa')||name.includes('fihr'))return 8;
+  if(gradeNumber>=4&&(name.includes('salida')||name.includes('optativa')))return 9;
+  return -1;
+}
+
+async function createOfficialBoletinPdf(snapshot){
+  if(!window.PDFLib)throw new Error('No se cargó la herramienta PDF. Revisa la conexión a Internet y vuelve a intentar.');
+  if(!snapshot||!Array.isArray(snapshot.subjects))throw new Error('El boletín guardado no contiene una lista de asignaturas válida.');
+  const gradeNumber=snapshot.gradeNumber||gradeParts(snapshot.gradeName)?.num;
+  const templateUrl=OFFICIAL_BOLETIN_PDFS[gradeNumber];
+  if(!templateUrl)throw new Error('El grado debe corresponder a una plantilla MINERD de 1.º a 6.º.');
+  const response=await fetch(templateUrl);
+  if(!response.ok)throw new Error(`No se pudo cargar la plantilla oficial del grado ${gradeNumber} (HTTP ${response.status}).`);
+  const pdfDocument=await PDFLib.PDFDocument.load(await response.arrayBuffer());
+  const [firstPage,secondPage]=pdfDocument.getPages();
+  if(!firstPage||!secondPage)throw new Error('La plantilla oficial no contiene sus dos páginas esperadas.');
+  const font=await pdfDocument.embedFont(PDFLib.StandardFonts.Helvetica);
+  const boldFont=await pdfDocument.embedFont(PDFLib.StandardFonts.HelveticaBold);
+
+  parseSchoolYear(snapshot.schoolYear);
+  const section=snapshot.section||gradeParts(snapshot.gradeName)?.section||'';
+  const student=snapshot.student||{};
+  const center=snapshot.center||{};
+  const firstName=student.firstName||'';
+  const lastName=student.lastName||'';
+  const fullName=`${firstName} ${lastName}`.trim();
+  const firstPageFields=[
+    [snapshot.schoolYear,720,319,180,8],
+    [section,590,291,145,8],
+    [student.orderNumber,860,291,95,8],
+    [firstName,610,269,335,8],
+    [lastName,610,247,335,8],
+    [student.sigerdId,745,225,205,8],
+    [snapshot.teacherName,600,203,350,8],
+    [center.name,645,181,300,8],
+    [center.code,650,159,295,8],
+    [center.shift,590,137,355,8],
+    [center.phone,665,115,280,8],
+    [center.district,650,93,295,8],
+    [center.regional,675,71,270,8],
+    [center.province,625,49,320,8],
+    [center.municipality,650,27,295,8]
+  ];
+  firstPageFields.forEach(([value,x,y,width,size])=>drawBulletinField(firstPage,font,value,x,y,width,size));
+  const observations=wrapBulletinText(snapshot.observations,font,8,425);
+  if(observations.length>18)throw new Error('Las observaciones exceden el espacio disponible en el boletín oficial.');
+  observations.forEach((line,index)=>drawBulletinField(firstPage,font,line,43,386-index*20,427,8));
+
+  drawBulletinField(secondPage,boldFont,fullName,145,574,390,8);
+  drawBulletinField(secondPage,boldFont,snapshot.gradeName,700,574,130,8);
+  drawBulletinField(secondPage,boldFont,section,881,574,82,8);
+
+  const periodCenters=[
+    [172.85,198.15,223.45,248.75],
+    [274.05,299.35,324.65,349.96],
+    [375.26,400.56,425.86,451.16],
+    [476.46,501.76,527.06,552.36]
+  ];
+  const competencyCenters=[577.02,601.02,625.02,649.03];
+  const rowCenters=[460.63,434.31,408,381.67,355.35,329.03,302.71,276.39,250.08,223.04];
+  const extraRows=gradeNumber>=4;
+  const warnings=[];
+  snapshot.subjects.forEach(subject=>{
+    const row=officialBulletinSubjectRow(subject.subjectName,gradeNumber);
+    if(row<0){warnings.push(`Asignatura sin fila en la plantilla: ${subject.subjectName}`);return;}
+    const y=rowCenters[row]-2.2;
+    const periods=Array.isArray(subject.periodScores)?subject.periodScores:[];
+    for(let competency=0;competency<4;competency++){
+      for(let period=0;period<4;period++){
+        drawBulletinCell(secondPage,font,periods[competency]?.[period],periodCenters[competency][period],y+2.2,22,6);
+      }
+    }
+    (subject.competencyAverages||[]).forEach((value,index)=>drawBulletinCell(secondPage,font,value,competencyCenters[index],y+2.2,21,6));
+    const finalScore=subject.finalScore===null||subject.finalScore===undefined?null:Number(subject.finalScore);
+    const ec=subject.ec===null||subject.ec===undefined||subject.ec===''?null:Number(subject.ec);
+    const ee=subject.ee===null||subject.ee===undefined||subject.ee===''?null:Number(subject.ee);
+    const special=subject.specialScore===null||subject.specialScore===undefined||subject.specialScore===''?null:Number(subject.specialScore);
+    drawBulletinCell(secondPage,font,finalScore,673.04,y+2.2,22,6);
+    const completiveFinal=finalScore!==null&&ec!==null?(finalScore+ec)/2:null;
+    [finalScore===null?null:finalScore*0.5,ec,ec===null?null:ec*0.5,completiveFinal]
+      .forEach((value,index)=>drawBulletinCell(secondPage,font,value,697.04+index*24.005,y+2.2,21,5.5));
+    const extraordinaryFinal=finalScore!==null&&ee!==null?finalScore*0.3+ee*0.7:null;
+    [finalScore===null?null:finalScore*0.3,ee,ee===null?null:ee*0.7,extraordinaryFinal]
+      .forEach((value,index)=>drawBulletinCell(secondPage,font,value,793.06+index*24.005,y+2.2,21,5.5));
+    drawBulletinCell(secondPage,font,finalScore,891.42,y+2.2,26,5.5);
+    drawBulletinCell(secondPage,font,special,920.16,y+2.2,26,5.5);
+    const resultScore=special??ee??ec??finalScore;
+    if(resultScore!==null&&Number.isFinite(resultScore)){
+      drawBulletinCell(secondPage,font,resultScore>=70?'X':'',948.69,y+2.2,19,6);
+      drawBulletinCell(secondPage,font,resultScore<70?'X':'',976.94,y+2.2,19,6);
+    }
+  });
+
+  const attendance=snapshot.attendance||{};
+  const attendanceRows=extraRows?[117.5,92.6,67.6,42.7]:[133,105.3,77.6,49.9];
+  attendanceRows.forEach((y,index)=>{
+    const period=attendance.periods?.[index];
+    if(!period)return;
+    drawBulletinCell(secondPage,font,period.attendance,111,y,44,6);
+    drawBulletinCell(secondPage,font,period.absence,160.4,y,43,6);
+  });
+  if(attendance.percentage!==null&&attendance.percentage!==undefined){
+    drawBulletinCell(secondPage,font,attendance.percentage,201,yForAttendanceTotal(extraRows),24,6);
+    drawBulletinCell(secondPage,font,attendance.attendance,235,yForAttendanceTotal(extraRows),24,6);
+    drawBulletinCell(secondPage,font,attendance.absence,268,yForAttendanceTotal(extraRows),24,6);
+  }
+  const resultY=extraRows?98.1:112;
+  drawBulletinField(secondPage,boldFont,snapshot.status,840,resultY,125,7);
+  if(snapshot.status==='PROMOVIDO/A')drawBulletinCell(secondPage,boldFont,'X',790,extraRows?163.2:194.9,18,8);
+  if(snapshot.status==='APLAZADO')drawBulletinCell(secondPage,boldFont,'X',894,extraRows?163.2:194.9,18,8);
+  snapshot.pdfWarnings=warnings;
+  return await pdfDocument.save();
+}
+
+function yForAttendanceTotal(hasExtraRow){return hasExtraRow?80.1:91.45;}
+
+function showOfficialBoletinPdf(pdfBytes,pdfWindow){
+  const fileName=`Boletin-${String(currentBoletinSnapshot?.gradeName||'grado').replace(/[^\w-]+/g,'-')}-${String(currentBoletinSnapshot?.student?.lastName||'estudiante').replace(/[^\w-]+/g,'-')}.pdf`;
+  const url=URL.createObjectURL(new Blob([pdfBytes],{type:'application/pdf'}));
+  if(pdfWindow&&!pdfWindow.closed)pdfWindow.location.href=url;
+  else{
+    const link=document.createElement('a');
+    link.href=url;link.download=fileName;link.click();
+  }
+  setTimeout(()=>URL.revokeObjectURL(url),300000);
 }
 
 async function saveBoletinRecord(){
   if(!currentBoletinSnapshot)return alert('Genera o abre un boletín antes de guardarlo.');
   if(!currentUser?.$id)return alert('Inicia sesión para guardar el boletín en la nube.');
   try{
+    const snapshot=JSON.stringify(currentBoletinSnapshot);
+    if(snapshot.length>10000)throw new Error('El boletín supera el límite de 10,000 caracteres de la columna snapshot.');
     const userPermission=Appwrite.Permission.read(Appwrite.Role.user(currentUser.$id));
     const saved=await apiPost(`/databases/${DB_ID}/collections/${COL.bulletin_records}/documents`,{
       documentId:'unique()',
@@ -1452,7 +1673,7 @@ async function saveBoletinRecord(){
         student_name:`${currentBoletinSnapshot.student.lastName}, ${currentBoletinSnapshot.student.firstName}`.trim(),
         grade_name:currentBoletinSnapshot.gradeName,
         school_year:currentBoletinSnapshot.schoolYear,
-        snapshot:currentBoletinSnapshot
+        snapshot
       }
     });
     document.getElementById('boletinSaveStatus').textContent='Boletín guardado en la nube. Puedes buscarlo y reabrirlo más adelante.';
@@ -1503,27 +1724,39 @@ async function openSavedBoletin(){
   const id=document.getElementById('savedBoletinSelect').value;
   const record=savedBoletinRecords.find(item=>item.$id===id);
   if(!record)return alert('Busca y selecciona primero un boletín guardado.');
+  const pdfWindow=window.open('about:blank','_blank');
   try{
     const snapshot=typeof record.snapshot==='string'?JSON.parse(record.snapshot):record.snapshot;
     const gradeSelect=document.getElementById('boletinGrade');
     gradeSelect.value=record.grade_id;
     await loadBoletinStudents();
     document.getElementById('boletinStudent').value=record.student_id;
+    await loadBoletinStudentDetails();
     document.getElementById('boletinSchoolYear').value=record.school_year||'';
+    document.getElementById('boletinSigerdId').value=snapshot.student?.sigerdId||'';
+    document.getElementById('boletinObservations').value=snapshot.observations||'';
     currentBoletinSnapshot=snapshot;
-    renderBoletinSnapshot(snapshot);
-    document.getElementById('boletinSaveStatus').textContent='Versión guardada abierta. Puedes imprimirla o conservarla como referencia.';
+    const pdfBytes=await createOfficialBoletinPdf(snapshot);
+    showOfficialBoletinPdf(pdfBytes,pdfWindow);
+    document.getElementById('boletinSaveStatus').textContent='Versión guardada abierta con la plantilla oficial. Usa los controles del visor PDF para imprimirla o descargarla.';
   }catch(error){
+    if(pdfWindow&&!pdfWindow.closed)pdfWindow.close();
     console.error('No se pudo abrir el boletín guardado:',error);
     alert(`❌ No se pudo abrir el boletín guardado: ${error.message}`);
   }
 }
 
-function printBoletin() {
+async function printBoletin() {
   if (!currentBoletinSnapshot) return alert("Genera o abre un boletín primero");
-  document.getElementById('boletinView').style.display = 'block';
-  window.print();
-  document.getElementById('boletinView').style.display = 'none';
+  const pdfWindow=window.open('about:blank','_blank');
+  try{
+    const pdfBytes=await createOfficialBoletinPdf(currentBoletinSnapshot);
+    showOfficialBoletinPdf(pdfBytes,pdfWindow);
+  }catch(error){
+    if(pdfWindow&&!pdfWindow.closed)pdfWindow.close();
+    console.error('No se pudo abrir el boletín oficial para imprimir:',error);
+    alert(`❌ No se pudo abrir el PDF oficial: ${error.message}`);
+  }
 }
 
 // ==========================================
@@ -1561,11 +1794,11 @@ async function generateReport() {
 // ==========================================
 // ⚙️ ADMIN
 // ==========================================
-const CENTER_FIELDS={centerName:'name',centerCode:'code',centerRegional:'regional',centerDistrict:'district',centerMunicipality:'municipality',centerAddress:'address',centerPhone:'phone',centerDirector:'director'};
+const CENTER_FIELDS={centerName:'name',centerCode:'code',centerRegional:'regional',centerDistrict:'district',centerProvince:'province',centerMunicipality:'municipality',centerShift:'shift',centerAddress:'address',centerPhone:'phone',centerDirector:'director'};
 function loadCenterSettings(){const c=getCenterConfig();Object.entries(CENTER_FIELDS).forEach(([id,key])=>{const el=document.getElementById(id);if(el)el.value=c[key]||'';});const preview=document.getElementById('centerLogoPreview');if(preview&&c.logo){preview.src=c.logo;preview.style.display='block';}}
 function readLogoData(file,maxW=700,maxH=500){return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onerror=()=>reject(Error('No se pudo leer el logo.'));reader.onload=()=>{const img=new Image();img.onerror=()=>reject(Error('El archivo no es una imagen válida.'));img.onload=()=>{const scale=Math.min(1,maxW/img.width,maxH/img.height),canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(img.width*scale));canvas.height=Math.max(1,Math.round(img.height*scale));canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);resolve(canvas.toDataURL('image/jpeg',.84));};img.src=reader.result;};reader.readAsDataURL(file);});}
 async function previewCenterLogo(event){const file=event.target.files?.[0];if(!file)return;try{const preview=document.getElementById('centerLogoPreview');preview.src=await readLogoData(file);preview.style.display='block';}catch(e){alert('❌ '+e.message);}}
-async function saveCenterSettings(){if(!requireAdminAction())return;const c=getCenterConfig();Object.entries(CENTER_FIELDS).forEach(([id,key])=>c[key]=document.getElementById(id).value.trim());const file=document.getElementById('centerLogoFile').files?.[0];try{if(file)c.logo=await readLogoData(file);localStorage.setItem(CENTER_CONFIG_KEY,JSON.stringify(c));loadCenterSettings();const h=document.querySelector('.boletin-header');if(h)h.innerHTML=buildCenterHeaderMarkup('BOLETÍN DE CALIFICACIONES','AÑO ESCOLAR 2025 - 2026');alert('✅ Datos del centro guardados para los encabezados de impresión.');}catch(e){alert('❌ No se pudieron guardar los datos: '+e.message);}}
+async function saveCenterSettings(){if(!requireAdminAction())return;const c=getCenterConfig();Object.entries(CENTER_FIELDS).forEach(([id,key])=>c[key]=document.getElementById(id).value.trim());const file=document.getElementById('centerLogoFile').files?.[0];try{if(file)c.logo=await readLogoData(file);localStorage.setItem(CENTER_CONFIG_KEY,JSON.stringify(c));loadCenterSettings();alert('✅ Datos del centro guardados para completar los boletines oficiales.');}catch(e){alert('❌ No se pudieron guardar los datos: '+e.message);}}
 function removeCenterLogo(){if(!requireAdminAction())return;const c=getCenterConfig();c.logo='';try{localStorage.setItem(CENTER_CONFIG_KEY,JSON.stringify(c));}catch(e){}document.getElementById('centerLogoFile').value='';const preview=document.getElementById('centerLogoPreview');preview.removeAttribute('src');preview.style.display='none';}
 
 let announcementChannel=null,activeAnnouncementId='',announcementTimer=null;
