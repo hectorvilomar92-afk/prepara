@@ -219,9 +219,20 @@ input.cell { width: 55px; padding: 6px; text-align: center; border: 1px solid #c
       <div class="config-grid">
         <label>Grado: <select id="boletinGrade" onchange="loadBoletinStudents()"></select></label>
         <label>Estudiante: <select id="boletinStudent"></select></label>
+        <label>Año escolar: <input id="boletinSchoolYear" type="text" placeholder="Ej.: 2026-2027"></label>
       </div>
       <button class="btn btn-warning" onclick="generateBoletin()">📄 Generar</button>
+      <button class="btn btn-info" onclick="openOfficialBoletinTemplate()">📑 Abrir plantilla oficial MINERD</button>
       <button class="btn btn-success" onclick="printBoletin()">🖨️ Imprimir/PDF</button>
+      <button class="btn btn-success" onclick="saveBoletinRecord()">💾 Guardar boletín</button>
+      <div class="config-grid" style="margin-top:16px;align-items:end;">
+        <button class="btn btn-info" onclick="loadSavedBoletines()">🔎 Buscar boletines guardados</button>
+        <label>Boletín guardado: <select id="savedBoletinSelect"><option value="">-- Busca boletines guardados --</option></select></label>
+        <button class="btn btn-warning" onclick="openSavedBoletin()">Abrir boletín guardado</button>
+      </div>
+      <p id="boletinSaveStatus" style="font-size:13px;color:#555;margin:8px 0;"></p>
+      <p style="font-size:12px;color:#555;margin:8px 0;">La plantilla PDF oficial se abre aparte y se imprime sin rellenar automáticamente. El boletín generado aquí puede imprimirse y guardarse como versión histórica en la nube.</p>
+      <p style="font-size:12px;margin:6px 0;"><a href="https://educando.edu.do/2023/09/boletines-de-calificaciones-del-nivel-secundario/" target="_blank" rel="noopener noreferrer">Fuente oficial: PDFs de boletines del Nivel Secundario (1.º a 6.º)</a></p>
     </div>
     <div id="reports" class="section">
       <h3>📈 Reportes</h3>
@@ -317,11 +328,22 @@ const COL = {
   subjects: '6ae945520038d0283af9',
   students: '6ae945fa003800d397bd',
   student_grades: '6ae946bc0013569424af',
-  attendance_records: '6ae94afb00099e65d54d'
+  attendance_records: '6ae94afb00099e65d54d',
+  bulletin_records: 'bulletin_records'
+};
+const OFFICIAL_BOLETIN_PDFS = {
+  1: 'https://educando.edu.do/wp-content/uploads/2023/09/Boletin-de-calificaciones-1er-grado-NS_110723.pdf',
+  2: 'https://educando.edu.do/wp-content/uploads/2023/09/Boletin-de-calificaciones-2do-grado-NS_110723.pdf',
+  3: 'https://educando.edu.do/wp-content/uploads/2023/09/Boletin-de-calificaciones-3er-grado-NS_110723.pdf',
+  4: 'https://educando.edu.do/wp-content/uploads/2023/09/Boletin-de-calificaciones-4to-grado-NS_110723.pdf',
+  5: 'https://educando.edu.do/wp-content/uploads/2023/09/Boletin-de-calificaciones-5to-grado-NS_110723.pdf',
+  6: 'https://educando.edu.do/wp-content/uploads/2023/09/Boletin-de-calificaciones-6to-grado-NS_110723.pdf'
 };
 
 let currentUser = null;
 let currentProfile = null;
+let currentBoletinSnapshot = null;
+let savedBoletinRecords = [];
 function isAdminUser(){return !!currentProfile && currentProfile.role === 'admin';}
 function requireAdminAction(){if(isAdminUser())return true;alert('⛔ Esta opción está disponible solo para el administrador.');return false;}
 let asistDates = [], asistMarks = {}, attendanceSavedRecords = [], attendanceLoadedId = '', attendanceContext = '';
@@ -336,6 +358,7 @@ const normalizeSubject=value=>String(value||'').normalize('NFD').replace(/[\u030
 async function ensureSubjectsForGrade(gradeId,allowCreate=isAdminUser()){if(!gradeId)return [];const result=await apiGet(`/databases/${DB_ID}/collections/${COL.subjects}/documents?limit=100`);let subjects=result.documents.filter(s=>s.grade_id===gradeId);if(allowCreate){for(const name of DEFAULT_SUBJECTS){if(!subjects.some(s=>normalizeSubject(s.name)===normalizeSubject(name))){try{subjects.push(await apiPost(`/databases/${DB_ID}/collections/${COL.subjects}/documents`,{documentId:'unique()',data:{grade_id:gradeId,name}}));}catch(err){console.warn('No se pudo crear la asignatura '+name,err.message);}}}}return subjects.sort((a,b)=>String(a.name).localeCompare(String(b.name),'es'));}
 const GRADE_ORDINAL={1:'1RO',2:'2DO',3:'3RO',4:'4TO',5:'5TO',6:'6TO'};
 const DEFAULT_GRADES=Object.values(GRADE_ORDINAL).flatMap(g=>['A','B','C'].map(section=>`${g} ${section}`));
+function getCurrentAcademicYear(){const now=new Date(),start=now.getMonth()>=7?now.getFullYear():now.getFullYear()-1;return `${start}-${start+1}`;}
 function gradeParts(value){const raw=String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().trim();const nMatch=raw.match(/^(1|2|3|4|5|6)(?:RO|DO|TO|ERO|º)?\b|^(PRIMERO|SEGUNDO|TERCERO|CUARTO|QUINTO|SEXTO)\b/);if(!nMatch)return null;const num=/^1|PRIMERO/.test(nMatch[0])?1:/^2|SEGUNDO/.test(nMatch[0])?2:/^3|TERCERO/.test(nMatch[0])?3:/^4|CUARTO/.test(nMatch[0])?4:/^5|QUINTO/.test(nMatch[0])?5:6;let rest=raw.slice(nMatch[0].length).replace(/^\s*(?:DE\s+)?(?:SECUNDARIA\s*)?/,'').replace(/^\s*(?:-|–|—)?\s*(?:SECCION|GRUPO|PARALELO)?\s*/,'').trim();const section=/^[ABC]$/.test(rest)?rest:'';return {num,section};}
 function gradeKey(value){const parts=gradeParts(value);if(parts)return `${parts.num}${parts.section}`;return String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'');}
 function canonicalGrade(value){const parts=gradeParts(value);return parts?GRADE_ORDINAL[parts.num]:'';}
@@ -365,6 +388,7 @@ function adaptTablesDBRequest(method,path,data){
   let mappedData=data;
   if(method==='POST'&&data){
     mappedData={rowId:data.documentId==='unique()'?Appwrite.ID.unique():data.documentId,data:data.data||{}};
+    if(Array.isArray(data.permissions))mappedData.permissions=data.permissions;
   }
   return {path:mappedPath,data:mappedData,isTableList:method==='GET'&&!rowId};
 }
@@ -523,6 +547,7 @@ async function loadProfile() {
     document.getElementById('app').style.display = 'block';
     document.getElementById('userDisplay').textContent = `👤 ${currentProfile.full_name} (${currentProfile.role})`;
     document.getElementById('asistDocente').value = `Prof. ${currentProfile.full_name}`;
+    if(!document.getElementById('boletinSchoolYear').value)document.getElementById('boletinSchoolYear').value=getCurrentAcademicYear();
     loadCenterSettings();
     
     if (currentProfile.role === 'admin') {
@@ -1332,50 +1357,170 @@ async function generateBoletin() {
     const grade = await apiGet(`/databases/${DB_ID}/collections/${COL.grades}/documents/${gradeId}`);
     const subjects = await ensureSubjectsForGrade(gradeId);
     const records=(await getAllStudentGradeRecords()).filter(record=>record.student_id===studentId);
-
-    document.querySelector('.boletin-header').innerHTML=buildCenterHeaderMarkup('BOLETÍN DE CALIFICACIONES','AÑO ESCOLAR 2025 - 2026');
-
-    document.getElementById('bFirst').textContent = student.first_name || '';
-    document.getElementById('bLast').textContent = student.last_name || '';
-    document.getElementById('bGrade').textContent = grade.name || '';
-    document.getElementById('bOrder').textContent = student.order_number || '';
-
-    const tbody = document.getElementById('boletinBody');
-    tbody.innerHTML = '';
+    const schoolYear=document.getElementById('boletinSchoolYear').value.trim()||getCurrentAcademicYear();
+    document.getElementById('boletinSchoolYear').value=schoolYear;
+    const bulletinSubjects=[];
     let total = 0, count = 0;
-
-    if (subjects.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="9">No hay asignaturas para este grado. Carga calificaciones primero.</td></tr>';
-    }
-
     subjects.forEach(subj => {
       const summary=getGradeSummary(records.filter(record=>record.subject_id===subj.$id));
       const fs=summary.finalScore;
       if(fs!==null){total+=fs;count++;}
-      const getV=value=>value!==null&&value!==undefined&&value!==''?value:'-';
-      const cls = fs >= 70 ? 'status-promovido' : (fs > 0 ? 'status-aplazado' : '');
-      tbody.innerHTML += `<tr>
-        <td style="text-align:left; font-weight:bold;">${escapeHtml(subj.name)}</td>
-        ${summary.competencyAverages.map(value=>`<td>${getV(value)}</td>`).join('')}
-        <td style="font-weight:bold;">${getV(fs)}</td><td>${getV(summary.ec)}</td><td>${getV(summary.ee)}</td>
-        <td class="${cls}">${escapeHtml(summary.status)}</td></tr>`;
+      bulletinSubjects.push({
+        subjectId:subj.$id,
+        subjectName:subj.name,
+        competencyAverages:summary.competencyAverages,
+        finalScore:fs,
+        ec:summary.ec,
+        ee:summary.ee,
+        status:summary.status
+      });
     });
-
-    const avg = count > 0 ? (total / count).toFixed(1) : 0;
+    const avg = count > 0 ? Number((total / count).toFixed(1)) : 0;
     const status = avg >= 70 ? 'PROMOVIDO/A' : (avg >= 60 ? 'CON ASIGNATURA PENDIENTE' : (count ? 'APLAZADO' : 'SIN CALIFICACIONES'));
-    document.getElementById('bStatus').textContent = `${status} - Promedio: ${avg}`;
-
-    // Mostrar vista previa en pantalla también
-    document.getElementById('boletinView').style.display = 'block';
-    document.getElementById('boletinView').scrollIntoView({ behavior: 'smooth' });
+    currentBoletinSnapshot={
+      version:1,
+      gradeId,
+      gradeName:grade.name||'',
+      studentId,
+      student:{
+        firstName:student.first_name||'',
+        lastName:student.last_name||'',
+        orderNumber:student.order_number||''
+      },
+      schoolYear,
+      subjects:bulletinSubjects,
+      average:avg,
+      status
+    };
+    renderBoletinSnapshot(currentBoletinSnapshot);
+    document.getElementById('boletinSaveStatus').textContent='Boletín generado. Puedes imprimirlo o guardar esta versión para consultarla después.';
   } catch (e) {
     console.error(e);
     alert('❌ Error generando boletín: ' + e.message);
   }
 }
 
+function renderBoletinSnapshot(snapshot){
+  if(!snapshot||!snapshot.student||!Array.isArray(snapshot.subjects))throw new Error('El boletín guardado tiene un formato no válido.');
+  document.querySelector('.boletin-header').innerHTML=buildCenterHeaderMarkup('BOLETÍN DE CALIFICACIONES',`AÑO ESCOLAR ${snapshot.schoolYear||''}`);
+  document.getElementById('bFirst').textContent=snapshot.student.firstName||'';
+  document.getElementById('bLast').textContent=snapshot.student.lastName||'';
+  document.getElementById('bGrade').textContent=snapshot.gradeName||'';
+  document.getElementById('bOrder').textContent=snapshot.student.orderNumber||'';
+  const getV=value=>value!==null&&value!==undefined&&value!==''?escapeHtml(String(value)):'-';
+  const tbody=document.getElementById('boletinBody');
+  tbody.innerHTML=snapshot.subjects.length?snapshot.subjects.map(subject=>{
+    const finalScore=subject.finalScore===null||subject.finalScore===undefined?null:Number(subject.finalScore);
+    const cls=finalScore!==null&&finalScore>=70?'status-promovido':finalScore!==null&&finalScore>0?'status-aplazado':'';
+    const averages=Array.isArray(subject.competencyAverages)?subject.competencyAverages:[];
+    return `<tr>
+      <td style="text-align:left;font-weight:bold;">${escapeHtml(subject.subjectName||'')}</td>
+      ${Array.from({length:4},(_,index)=>`<td>${getV(averages[index])}</td>`).join('')}
+      <td style="font-weight:bold;">${getV(subject.finalScore)}</td><td>${getV(subject.ec)}</td><td>${getV(subject.ee)}</td>
+      <td class="${cls}">${escapeHtml(subject.status||'-')}</td></tr>`;
+  }).join(''):'<tr><td colspan="9">No hay asignaturas para este grado.</td></tr>';
+  document.getElementById('bStatus').textContent=`${snapshot.status||'SIN CALIFICACIONES'} - Promedio: ${snapshot.average??0}`;
+  document.getElementById('boletinView').style.display='block';
+  document.getElementById('boletinView').scrollIntoView({behavior:'smooth'});
+}
+
+function openOfficialBoletinTemplate(){
+  const gradeSelect=document.getElementById('boletinGrade');
+  const gradeName=gradeSelect.selectedOptions[0]?.textContent||'';
+  const gradeNumber=gradeParts(gradeName)?.num;
+  const url=OFFICIAL_BOLETIN_PDFS[gradeNumber];
+  if(!url)return alert('Selecciona un grado de secundaria del 1.º al 6.º.');
+  const link=document.createElement('a');
+  link.href=url;
+  link.target='_blank';
+  link.rel='noopener noreferrer';
+  link.click();
+}
+
+async function saveBoletinRecord(){
+  if(!currentBoletinSnapshot)return alert('Genera o abre un boletín antes de guardarlo.');
+  if(!currentUser?.$id)return alert('Inicia sesión para guardar el boletín en la nube.');
+  try{
+    const userPermission=Appwrite.Permission.read(Appwrite.Role.user(currentUser.$id));
+    const saved=await apiPost(`/databases/${DB_ID}/collections/${COL.bulletin_records}/documents`,{
+      documentId:'unique()',
+      permissions:[userPermission],
+      data:{
+        owner_id:currentUser.$id,
+        student_id:currentBoletinSnapshot.studentId,
+        grade_id:currentBoletinSnapshot.gradeId,
+        student_name:`${currentBoletinSnapshot.student.lastName}, ${currentBoletinSnapshot.student.firstName}`.trim(),
+        grade_name:currentBoletinSnapshot.gradeName,
+        school_year:currentBoletinSnapshot.schoolYear,
+        snapshot:currentBoletinSnapshot
+      }
+    });
+    document.getElementById('boletinSaveStatus').textContent='Boletín guardado en la nube. Puedes buscarlo y reabrirlo más adelante.';
+    await loadSavedBoletines(saved.$id);
+  }catch(error){
+    console.error('No se pudo guardar el boletín:',error);
+    document.getElementById('boletinSaveStatus').textContent=`No se pudo guardar: ${error.message}`;
+    alert(`❌ No se pudo guardar el boletín. Verifica que la tabla Appwrite "${COL.bulletin_records}" esté configurada: ${error.message}`);
+  }
+}
+
+async function getAllBoletinRecords(){
+  const base=`/databases/${DB_ID}/collections/${COL.bulletin_records}/documents`;
+  const pageSize=100;let offset=0;const records=[];
+  while(true){
+    const page=await apiGet(`${base}?limit=${pageSize}&offset=${offset}`);
+    records.push(...page.documents);
+    if(page.documents.length<pageSize)return records;
+    offset+=page.documents.length;
+  }
+}
+
+async function loadSavedBoletines(selectId=''){
+  const select=document.getElementById('savedBoletinSelect');
+  const status=document.getElementById('boletinSaveStatus');
+  select.innerHTML='<option value="">Cargando boletines guardados...</option>';
+  try{
+    const records=await getAllBoletinRecords();
+    savedBoletinRecords=records.filter(record=>record.owner_id===currentUser?.$id)
+      .sort((a,b)=>String(b.$createdAt||'').localeCompare(String(a.$createdAt||'')));
+    select.innerHTML='<option value="">-- Selecciona un boletín guardado --</option>';
+    savedBoletinRecords.forEach(record=>{
+      const savedAt=record.$createdAt?new Date(record.$createdAt).toLocaleString():'';
+      select.add(new Option(`${record.school_year} · ${record.grade_name} · ${record.student_name}${savedAt?' · '+savedAt:''}`,record.$id));
+    });
+    if(selectId)select.value=selectId;
+    status.textContent=savedBoletinRecords.length
+      ? 'Selecciona un boletín para abrir la versión guardada.'
+      : 'No tienes boletines guardados todavía.';
+  }catch(error){
+    console.error('No se pudieron buscar los boletines guardados:',error);
+    select.innerHTML='<option value="">No se pudieron cargar los boletines</option>';
+    status.textContent=`No se pudieron buscar los boletines. Verifica la configuración de Appwrite: ${error.message}`;
+  }
+}
+
+async function openSavedBoletin(){
+  const id=document.getElementById('savedBoletinSelect').value;
+  const record=savedBoletinRecords.find(item=>item.$id===id);
+  if(!record)return alert('Busca y selecciona primero un boletín guardado.');
+  try{
+    const snapshot=typeof record.snapshot==='string'?JSON.parse(record.snapshot):record.snapshot;
+    const gradeSelect=document.getElementById('boletinGrade');
+    gradeSelect.value=record.grade_id;
+    await loadBoletinStudents();
+    document.getElementById('boletinStudent').value=record.student_id;
+    document.getElementById('boletinSchoolYear').value=record.school_year||'';
+    currentBoletinSnapshot=snapshot;
+    renderBoletinSnapshot(snapshot);
+    document.getElementById('boletinSaveStatus').textContent='Versión guardada abierta. Puedes imprimirla o conservarla como referencia.';
+  }catch(error){
+    console.error('No se pudo abrir el boletín guardado:',error);
+    alert(`❌ No se pudo abrir el boletín guardado: ${error.message}`);
+  }
+}
+
 function printBoletin() {
-  if (!document.getElementById('boletinBody').innerHTML) return alert("Genera el boletín primero");
+  if (!currentBoletinSnapshot) return alert("Genera o abre un boletín primero");
   document.getElementById('boletinView').style.display = 'block';
   window.print();
   document.getElementById('boletinView').style.display = 'none';
