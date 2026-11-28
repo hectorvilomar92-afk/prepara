@@ -286,6 +286,8 @@ const APPWRITE_PROJECT_ID = '6ae93a8800004541afa3'; // ✅ TU PROJECT ID CORRECT
 const DB_ID = '6ae94013000210b1d830';
 const appwriteClient = window.Appwrite ? new Appwrite.Client().setEndpoint(APPWRITE_ENDPOINT).setProject(APPWRITE_PROJECT_ID) : null;
 const appwriteAccount = appwriteClient ? new Appwrite.Account(appwriteClient) : null;
+const appwriteStorage = appwriteClient ? new Appwrite.Storage(appwriteClient) : null;
+const BOLETIN_STORAGE_BUCKET_ID = 'bulletin-snapshots';
 
 // IDs reales de colecciones
 const COL = {
@@ -330,7 +332,7 @@ function gradeKey(value){const parts=gradeParts(value);if(parts)return `${parts.
 function canonicalGrade(value){const parts=gradeParts(value);return parts?GRADE_ORDINAL[parts.num]:'';}
 function sortGrades(a,b){const pa=gradeParts(a.name),pb=gradeParts(b.name);if(pa&&pb)return pa.num-pb.num||pa.section.localeCompare(pb.section);if(pa)return -1;if(pb)return 1;return String(a.name).localeCompare(String(b.name),'es');}
 async function ensureGrade(name){const result=await apiGet(`/databases/${DB_ID}/collections/${COL.grades}/documents?limit=100`);let grade=result.documents.find(g=>gradeKey(g.name)===gradeKey(name));if(!grade)grade=await apiPost(`/databases/${DB_ID}/collections/${COL.grades}/documents`,{documentId:'unique()',data:{name,teacher_id:'',year:2026}});try{await ensureSubjectsForGrade(grade.$id);}catch(err){console.warn('No se pudieron preparar las materias de '+name,err.message);}return grade;}
-async function ensureDefaultGrades(){try{const result=await apiGet(`/databases/${DB_ID}/collections/${COL.grades}/documents?limit=100`);for(const g of result.documents){const parts=gradeParts(g.name);if(parts){const target=`${GRADE_ORDINAL[parts.num]} ${parts.section||'A'}`;if(g.name!==target&&!result.documents.some(other=>other.$id!==g.$id&&gradeKey(other.name)===gradeKey(target))){try{await apiPut(`/databases/${DB_ID}/collections/${COL.grades}/documents/${g.$id}`,{data:{name:target}});g.name=target;}catch(err){console.warn('No se pudo renombrar el grado '+g.name,err.message);}}}}}catch(err){console.warn('No se pudo actualizar el catálogo de grados',err.message);}for(const name of DEFAULT_GRADES){try{await ensureGrade(name);}catch(err){console.warn('No se pudo preparar el grado '+name,err.message);}}}
+async function ensureDefaultGrades(){try{const result=await apiGet(`/databases/${DB_ID}/collections/${COL.grades}/documents?limit=100`);for(const g of result.documents){const parts=gradeParts(g.name);if(parts){const target=`${GRADE_ORDINAL[parts.num]} ${parts.section||'A'}`;if(g.name!==target&&!result.documents.some(other=>other.$id!==g.$id&&gradeKey(other.name)===gradeKey(target))){try{await apiPut(`/databases/${DB_ID}/collections/${COL.grades}/documents/${g.$id}`,{data:{name:target,teacher_id:g.teacher_id||'',year:g.year??2026}});g.name=target;}catch(err){console.warn('No se pudo renombrar el grado '+g.name,err.message);}}}}}catch(err){console.warn('No se pudo actualizar el catálogo de grados',err.message);}for(const name of DEFAULT_GRADES){try{await ensureGrade(name);}catch(err){console.warn('No se pudo preparar el grado '+name,err.message);}}}
 function adaptTablesDBRequest(method,path,data){
   const match=path.match(/^\/databases\/([^/]+)\/collections\/([^/]+)\/documents(?:\/([^/?]+))?(?:\?([^#]*))?$/);
   if(!match)return {path,data,isTableList:false};
@@ -999,6 +1001,27 @@ function calculateCompetencyAverage(record){
   }
   return Number((periodScores.reduce((sum,value)=>sum+value,0)/4).toFixed(1));
 }
+async function writeGradeRecord(existing,data,specialScoreColumnMissing){
+  const write=async payload=>{
+    if(existing)return apiPut(`/databases/${DB_ID}/collections/${COL.student_grades}/documents/${existing.$id}`,{data:payload});
+    return apiPost(`/databases/${DB_ID}/collections/${COL.student_grades}/documents`,{documentId:'unique()',data:payload});
+  };
+  const payload={...data};
+  if(specialScoreColumnMissing)delete payload.special_score;
+  try{
+    await write(payload);
+    return specialScoreColumnMissing;
+  }catch(error){
+    if(!/Unknown attribute:\s*["']?special_score["']?/i.test(error.message))throw error;
+    if(data.special_score!==null&&data.special_score!==undefined){
+      throw new Error('Appwrite no tiene la columna Float "special_score". Agrégala a la tabla de calificaciones para guardar las notas de evaluación especial.');
+    }
+    if(specialScoreColumnMissing)throw error;
+    delete payload.special_score;
+    await write(payload);
+    return true;
+  }
+}
 function getGradeSummary(records){
   const competencyRecords=records.filter(record=>COMPETENCY_RECORD_STATUS.test(String(record.status||'')));
   if(competencyRecords.length){
@@ -1296,11 +1319,13 @@ async function saveGrades(){
         pendingWrites.push({existing,data});
       }
     }
+    let specialScoreColumnMissing=false;
     for(const {existing,data} of pendingWrites){
-      if(existing)await apiPut(`/databases/${DB_ID}/collections/${COL.student_grades}/documents/${existing.$id}`,{data});
-      else await apiPost(`/databases/${DB_ID}/collections/${COL.student_grades}/documents`,{documentId:'unique()',data});
+      specialScoreColumnMissing=await writeGradeRecord(existing,data,specialScoreColumnMissing);
     }
-    alert('✅ Calificaciones por competencia guardadas.');
+    alert(specialScoreColumnMissing
+      ? '✅ Calificaciones por competencia guardadas. Para guardar la evaluación especial, agrega la columna Float "special_score" a la tabla de calificaciones.'
+      : '✅ Calificaciones por competencia guardadas.');
     await loadGradesTable();
   }catch(error){console.error(error);alert('❌ No se pudieron guardar las calificaciones: '+error.message);}
 }
@@ -1459,7 +1484,7 @@ async function generateBoletin() {
       },
       schoolYear,
       teacherName,
-      center,
+      center:createBoletinCenterSnapshot(center),
       observations:document.getElementById('boletinObservations').value.trim(),
       attendance,
       subjects:bulletinSubjects,
@@ -1659,6 +1684,12 @@ function showOfficialBoletinPdf(pdfBytes,pdfWindow){
 const BOLETIN_SNAPSHOT_LIMIT=10000;
 const BOLETIN_SNAPSHOT_COMPRESSED_PREFIX='gzip:';
 
+function createBoletinCenterSnapshot(center){
+  const snapshot={...center};
+  delete snapshot.logo;
+  return snapshot;
+}
+
 function bytesToBase64(bytes){
   let binary='';
   const chunkSize=0x8000;
@@ -1678,20 +1709,28 @@ function base64ToBytes(value){
 async function serializeBoletinSnapshot(snapshot){
   const serialized=JSON.stringify(snapshot);
   if(serialized.length<=BOLETIN_SNAPSHOT_LIMIT)return serialized;
-  if(typeof CompressionStream==='undefined'){
-    throw new Error('El boletín supera los 10,000 caracteres y este navegador no permite comprimirlo. Actualiza el navegador para guardarlo.');
+  if(typeof CompressionStream!=='undefined'){
+    const compressedStream=new Blob([serialized]).stream().pipeThrough(new CompressionStream('gzip'));
+    const compressed=new Uint8Array(await new Response(compressedStream).arrayBuffer());
+    const encoded=BOLETIN_SNAPSHOT_COMPRESSED_PREFIX+bytesToBase64(compressed);
+    if(encoded.length<=BOLETIN_SNAPSHOT_LIMIT)return encoded;
   }
-  const compressedStream=new Blob([serialized]).stream().pipeThrough(new CompressionStream('gzip'));
-  const compressed=new Uint8Array(await new Response(compressedStream).arrayBuffer());
-  const encoded=BOLETIN_SNAPSHOT_COMPRESSED_PREFIX+bytesToBase64(compressed);
-  if(encoded.length>BOLETIN_SNAPSHOT_LIMIT){
-    throw new Error(`El boletín comprimido ocupa ${encoded.length.toLocaleString()} caracteres y todavía supera el límite de 10,000 de snapshot.`);
-  }
-  return encoded;
+  return {storageContent:serialized};
 }
 
 async function parseBoletinSnapshot(value){
   if(typeof value!=='string')return value;
+  if(value.startsWith('storage:')){
+    if(!appwriteClient)throw new Error('No se pudo cargar el SDK de almacenamiento de Appwrite.');
+    const fileId=value.slice('storage:'.length);
+    const url=`${APPWRITE_ENDPOINT}/storage/buckets/${encodeURIComponent(BOLETIN_STORAGE_BUCKET_ID)}/files/${encodeURIComponent(fileId)}/download`;
+    const response=await fetch(url,{headers:{'X-Appwrite-Project':APPWRITE_PROJECT_ID},credentials:'include'});
+    if(!response.ok){
+      const error=await response.json().catch(()=>({message:response.statusText}));
+      throw new Error(error.message||response.statusText);
+    }
+    return response.json();
+  }
   if(!value.startsWith(BOLETIN_SNAPSHOT_COMPRESSED_PREFIX))return JSON.parse(value);
   if(typeof DecompressionStream==='undefined'){
     throw new Error('Este navegador no permite descomprimir el boletín guardado. Actualiza el navegador para abrirlo.');
@@ -1704,8 +1743,22 @@ async function parseBoletinSnapshot(value){
 async function saveBoletinRecord(){
   if(!currentBoletinSnapshot)return alert('Genera o abre un boletín antes de guardarlo.');
   if(!currentUser?.$id)return alert('Inicia sesión para guardar el boletín en la nube.');
+  let uploadedFileId='';
   try{
-    const snapshot=await serializeBoletinSnapshot(currentBoletinSnapshot);
+    const serializedSnapshot=await serializeBoletinSnapshot(currentBoletinSnapshot);
+    let snapshot=serializedSnapshot;
+    if(typeof serializedSnapshot!=='string'){
+      if(!appwriteStorage)throw new Error('No se pudo cargar el SDK de almacenamiento de Appwrite.');
+      if(typeof File==='undefined')throw new Error('Este navegador no permite subir el boletín a Appwrite Storage.');
+      const file=new File([serializedSnapshot.storageContent],`boletin-${Date.now()}.json`,{type:'application/json'});
+      const filePermissions=[
+        Appwrite.Permission.read(Appwrite.Role.user(currentUser.$id)),
+        Appwrite.Permission.delete(Appwrite.Role.user(currentUser.$id))
+      ];
+      const uploaded=await appwriteStorage.createFile(BOLETIN_STORAGE_BUCKET_ID,Appwrite.ID.unique(),file,filePermissions);
+      uploadedFileId=uploaded.$id;
+      snapshot=`storage:${uploadedFileId}`;
+    }
     const userPermission=Appwrite.Permission.read(Appwrite.Role.user(currentUser.$id));
     const saved=await apiPost(`/databases/${DB_ID}/collections/${COL.bulletin_records}/documents`,{
       documentId:'unique()',
@@ -1720,9 +1773,14 @@ async function saveBoletinRecord(){
         snapshot
       }
     });
+    uploadedFileId='';
     document.getElementById('boletinSaveStatus').textContent='Boletín guardado en la nube. Puedes buscarlo y reabrirlo más adelante.';
     await loadSavedBoletines(saved.$id);
   }catch(error){
+    if(uploadedFileId&&appwriteStorage){
+      try{await appwriteStorage.deleteFile(BOLETIN_STORAGE_BUCKET_ID,uploadedFileId);}
+      catch(cleanupError){console.error('No se pudo limpiar el archivo temporal del boletín:',cleanupError);}
+    }
     console.error('No se pudo guardar el boletín:',error);
     document.getElementById('boletinSaveStatus').textContent=`No se pudo guardar: ${error.message}`;
     alert(`❌ No se pudo guardar el boletín. Verifica que la tabla Appwrite "${COL.bulletin_records}" esté configurada: ${error.message}`);
