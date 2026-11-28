@@ -1656,12 +1656,56 @@ function showOfficialBoletinPdf(pdfBytes,pdfWindow){
   setTimeout(()=>URL.revokeObjectURL(url),300000);
 }
 
+const BOLETIN_SNAPSHOT_LIMIT=10000;
+const BOLETIN_SNAPSHOT_COMPRESSED_PREFIX='gzip:';
+
+function bytesToBase64(bytes){
+  let binary='';
+  const chunkSize=0x8000;
+  for(let offset=0;offset<bytes.length;offset+=chunkSize){
+    binary+=String.fromCharCode(...bytes.subarray(offset,offset+chunkSize));
+  }
+  return btoa(binary);
+}
+
+function base64ToBytes(value){
+  const binary=atob(value);
+  const bytes=new Uint8Array(binary.length);
+  for(let index=0;index<binary.length;index++)bytes[index]=binary.charCodeAt(index);
+  return bytes;
+}
+
+async function serializeBoletinSnapshot(snapshot){
+  const serialized=JSON.stringify(snapshot);
+  if(serialized.length<=BOLETIN_SNAPSHOT_LIMIT)return serialized;
+  if(typeof CompressionStream==='undefined'){
+    throw new Error('El boletín supera los 10,000 caracteres y este navegador no permite comprimirlo. Actualiza el navegador para guardarlo.');
+  }
+  const compressedStream=new Blob([serialized]).stream().pipeThrough(new CompressionStream('gzip'));
+  const compressed=new Uint8Array(await new Response(compressedStream).arrayBuffer());
+  const encoded=BOLETIN_SNAPSHOT_COMPRESSED_PREFIX+bytesToBase64(compressed);
+  if(encoded.length>BOLETIN_SNAPSHOT_LIMIT){
+    throw new Error(`El boletín comprimido ocupa ${encoded.length.toLocaleString()} caracteres y todavía supera el límite de 10,000 de snapshot.`);
+  }
+  return encoded;
+}
+
+async function parseBoletinSnapshot(value){
+  if(typeof value!=='string')return value;
+  if(!value.startsWith(BOLETIN_SNAPSHOT_COMPRESSED_PREFIX))return JSON.parse(value);
+  if(typeof DecompressionStream==='undefined'){
+    throw new Error('Este navegador no permite descomprimir el boletín guardado. Actualiza el navegador para abrirlo.');
+  }
+  const compressed=base64ToBytes(value.slice(BOLETIN_SNAPSHOT_COMPRESSED_PREFIX.length));
+  const decompressedStream=new Blob([compressed]).stream().pipeThrough(new DecompressionStream('gzip'));
+  return JSON.parse(await new Response(decompressedStream).text());
+}
+
 async function saveBoletinRecord(){
   if(!currentBoletinSnapshot)return alert('Genera o abre un boletín antes de guardarlo.');
   if(!currentUser?.$id)return alert('Inicia sesión para guardar el boletín en la nube.');
   try{
-    const snapshot=JSON.stringify(currentBoletinSnapshot);
-    if(snapshot.length>10000)throw new Error('El boletín supera el límite de 10,000 caracteres de la columna snapshot.');
+    const snapshot=await serializeBoletinSnapshot(currentBoletinSnapshot);
     const userPermission=Appwrite.Permission.read(Appwrite.Role.user(currentUser.$id));
     const saved=await apiPost(`/databases/${DB_ID}/collections/${COL.bulletin_records}/documents`,{
       documentId:'unique()',
@@ -1726,7 +1770,7 @@ async function openSavedBoletin(){
   if(!record)return alert('Busca y selecciona primero un boletín guardado.');
   const pdfWindow=window.open('about:blank','_blank');
   try{
-    const snapshot=typeof record.snapshot==='string'?JSON.parse(record.snapshot):record.snapshot;
+    const snapshot=await parseBoletinSnapshot(record.snapshot);
     const gradeSelect=document.getElementById('boletinGrade');
     gradeSelect.value=record.grade_id;
     await loadBoletinStudents();
